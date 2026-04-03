@@ -192,7 +192,7 @@ function hideAll() {
 .selector-btn {
   display: flex;
   align-items: center;
-  gap: 6px;
+  gap: 8px;
   padding: 7px 14px;
   border: 1px solid var(--border);
   border-radius: 10px;
@@ -227,21 +227,27 @@ function hideAll() {
 
 .dropdown-panel {
   position: absolute;
-  top: calc(100% + 8px);
+  top: calc(100% + 10px);
   left: 0;
   z-index: 1000;
-  min-width: 200px;
-  background: var(--bg-card);
-  border: 1px solid var(--border);
-  border-radius: 12px;
-  padding: 12px;
-  box-shadow: 0 8px 24px rgba(0, 0, 0, 0.3);
+  min-width: 220px;
+  background: linear-gradient(165deg, rgba(26, 34, 45, 0.98) 0%, rgba(17, 24, 32, 0.98) 100%);
+  backdrop-filter: blur(20px);
+  -webkit-backdrop-filter: blur(20px);
+  border: 1px solid rgba(255, 255, 255, 0.1);
+  border-radius: 14px;
+  padding: 14px;
+  box-shadow:
+    0 24px 48px rgba(0, 0, 0, 0.55),
+    0 0 0 1px rgba(52, 211, 153, 0.06);
 }
 
 .backdrop {
   position: fixed;
   inset: 0;
   z-index: 999;
+  background: rgba(0, 0, 0, 0.35);
+  backdrop-filter: blur(2px);
 }
 
 .indicator-group {
