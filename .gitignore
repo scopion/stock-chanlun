@@ -341,3 +341,7 @@ watchlist.local.json
 *.pem
 secrets.json
 .worktrees/
+
+# Documentation
+/docs
+
