@@ -6,34 +6,18 @@
 import { ref, watch, onMounted, onUnmounted } from 'vue'
 import * as echarts from 'echarts'
 import type { KLine } from '../../api/stock'
+import { calcMACD } from '../../utils/stockIndicators'
 
 const props = defineProps<{ klines: KLine[] }>()
 
 const chartRef = ref<HTMLDivElement | null>(null)
 let chart: echarts.ECharts | null = null
 
-function calcEMA(data: number[], period: number) {
-  const k = 2 / (period + 1)
-  const ema = [data[0]]
-  for (let i = 1; i < data.length; i++) {
-    ema.push(data[i] * k + ema[i - 1] * (1 - k))
-  }
-  return ema
-}
-
-function calcMACD(closes: number[]) {
-  const ema12 = calcEMA(closes, 12)
-  const ema26 = calcEMA(closes, 26)
-  const dif = ema12.map((v, i) => v - ema26[i])
-  const dea = calcEMA(dif, 9)
-  const bar = dif.map((v, i) => (v - dea[i]) * 2)
-  return { dif, dea, bar }
-}
-
 function buildOption() {
   if (props.klines.length < 30) return {}
-  const closes = props.klines.map(k => k.close)
-  const { dif, dea, bar } = calcMACD(closes)
+  const closes = props.klines.map(k => Number(k.close))
+  const { dif, dea } = calcMACD(closes)
+  const bar = dif.map((v, i) => (v - dea[i]) * 2)
   const dates = props.klines.map(k => k.date.slice(0, 10))
 
   return {

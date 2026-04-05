@@ -10,6 +10,7 @@ import { ref, watch, onMounted, onUnmounted } from 'vue'
 import * as echarts from 'echarts'
 import type { KLine, Bi, Zhongshu, Signal, AISignal, SupportResistance } from '../../api/stock'
 import type { IndicatorConfig } from '../../stores/chanlun'
+import { computeDualMacdSkdjMarkerIndices } from '../../utils/stockIndicators'
 
 const props = defineProps<{
   klines: KLine[]
@@ -31,6 +32,7 @@ function getIndicators(): Required<IndicatorConfig> {
   return {
     ma5: true, ma20: true, ma60: true,
     bis: true, xiangs: true, zhongshus: true, signals: true, aiLines: true,
+    supportResistance: true,
     volume: true, macd: true, rsi: true, skdj: true,
     ...(props.indicators || {})
   }
@@ -480,6 +482,39 @@ function applyChanlunGraphic() {
           x: gridLeft + 8, y: yy - 6, z: 104, silent: true
         })
       }
+    }
+  }
+
+  // ── MACD + SKDJ 双金叉（算法与副图 utils/stockIndicators 同源；合并段取最左一根防误标死叉日） ──
+  if (props.klines.length >= 30) {
+    const RESONANCE_WINDOW = 3
+    const { indices: markIdxs } = computeDualMacdSkdjMarkerIndices(props.klines, RESONANCE_WINDOW)
+    for (const idx of markIdxs) {
+      const pt = pixelAtIdx(idx, props.klines[idx].close)
+      if (!pt) {
+        console.warn(`[MACD+SKDJ] pixelAtIdx 返回 null，idx=${idx}`)
+        continue
+      }
+      console.log(`[MACD+SKDJ 标记] idx=${idx} 日期=${props.klines[idx].date.slice(0,10)} 像素=(${pt[0].toFixed(1)},${pt[1].toFixed(1)}) 收盘=${props.klines[idx].close}`)
+      children.push({
+        type: 'circle',
+        shape: { cx: pt[0], cy: pt[1], r: 7 },
+        style: { fill: '#ffe066', stroke: '#0d1117', lineWidth: 2.5 },
+        z: 106, silent: true
+      })
+      children.push({
+        type: 'text',
+        style: {
+          text: 'MACD+SKDJ',
+          fill: '#ffe066',
+          fontSize: 10, fontWeight: 700,
+          fontFamily: 'Noto Sans SC',
+          textAlign: 'center'
+        },
+        x: pt[0],
+        y: pt[1] - 12,
+        z: 107, silent: true
+      })
     }
   }
 
