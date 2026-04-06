@@ -9,6 +9,7 @@ const router = createRouter({
     { path: '/', component: HomeView },
     { path: '/stock/:code', component: StockView },
     { path: '/watchlist', component: WatchlistView },
+    { path: '/screen', component: () => import('../views/StockScreenView.vue') },
   ]
 })
 

@@ -9,6 +9,7 @@ import re
 import urllib.parse
 from datetime import datetime, timedelta
 from typing import Optional
+from concurrent.futures import ThreadPoolExecutor, as_completed
 import httpx
 
 # ─── requests 全局超时补丁 ─────────────────────────────────────────────────
@@ -232,7 +233,7 @@ def _get_qq_market_code(code: str) -> str:
 
 
 def get_realtime_quote(codes: list[str]) -> pd.DataFrame:
-    """获取实时行情"""
+    """获取实时行情，分批并发拉取（腾讯 API 单 URL 约 150 只为上限）。"""
     if not codes:
         return pd.DataFrame()
 
@@ -241,57 +242,63 @@ def get_realtime_quote(codes: list[str]) -> pd.DataFrame:
     if cached is not None:
         return cached
 
-    try:
-        # 构建腾讯行情请求
+    # 腾讯 API 单次请求上限约 150 只，分批并发
+    BATCH = 150
+
+    def _fetch_batch(batch: list[str]) -> list[dict]:
         qq_codes = []
-        for code in codes:
+        for code in batch:
             sym, _ = normalize_stock_code(code)
             mkt = _get_qq_market_code(code)
             qq_codes.append(f"{mkt}{sym}")
-
         url = f"https://qt.gtimg.cn/q={','.join(qq_codes)}"
-        client = _get_client()
-        resp = client.get(url)
-        text = resp.text
+        try:
+            client = _get_client()
+            resp = client.get(url, timeout=10)
+            records = []
+            lines = resp.text.strip().split('\n')
+            for i, line in enumerate(lines):
+                if not line or '=' not in line:
+                    continue
+                match = re.search(r'v_\w+="(.+)"', line)
+                if not match:
+                    continue
+                data = match.group(1).split('~')
+                if len(data) < 38:
+                    continue
+                try:
+                    stock_code = batch[i] if i < len(batch) else data[2]
+                    records.append({
+                        "代码": data[2] if len(data) > 2 else stock_code,
+                        "名称": data[1] if len(data) > 1 else "",
+                        "最新价": float(data[3]) if data[3] else 0,
+                        "涨跌幅": float(data[32]) if len(data) > 32 and data[32] else 0,
+                        "成交量": float(data[6]) if data[6] else 0,
+                        "成交额": float(data[37]) if len(data) > 37 and data[37] else 0,
+                        "今开": float(data[4]) if data[4] else 0,
+                        "最高": float(data[33]) if len(data) > 33 and data[33] else 0,
+                        "最低": float(data[34]) if len(data) > 34 and data[34] else 0,
+                        "昨收": float(data[5]) if data[5] else 0,
+                    })
+                except (ValueError, IndexError):
+                    continue
+            return records
+        except Exception as e:
+            print(f"[行情] 批次拉取失败: {e}")
+            return []
 
-        records = []
-        lines = text.strip().split('\n')
-        for i, line in enumerate(lines):
-            if not line or '=' not in line:
-                continue
-            # 解析: v_sz000001="51~平安银行~..."
-            match = re.search(r'v_\w+="(.+)"', line)
-            if not match:
-                continue
-            data = match.group(1).split('~')
-            # 与 get_stock_info 一致：至少覆盖到成交额等字段（约 38 项），勿用 50 过严导致丢弃合法响应
-            if len(data) < 38:
-                continue
-            try:
-                stock_code = codes[i] if i < len(codes) else data[2]
-                records.append({
-                    "代码": data[2] if len(data) > 2 else stock_code,
-                    "名称": data[1] if len(data) > 1 else "",
-                    "最新价": float(data[3]) if data[3] else 0,
-                    "涨跌幅": float(data[32]) if len(data) > 32 and data[32] else 0,
-                    "成交量": float(data[6]) if data[6] else 0,
-                    "成交额": float(data[37]) if len(data) > 37 and data[37] else 0,
-                    "今开": float(data[4]) if data[4] else 0,
-                    "最高": float(data[33]) if len(data) > 33 and data[33] else 0,
-                    "最低": float(data[34]) if len(data) > 34 and data[34] else 0,
-                    "昨收": float(data[5]) if data[5] else 0,
-                })
-            except (ValueError, IndexError):
-                continue
+    # 并发分批
+    batches = [codes[i:i + BATCH] for i in range(0, len(codes), BATCH)]
+    workers = min(len(batches), 10)
+    all_records: list[dict] = []
+    with ThreadPoolExecutor(max_workers=workers) as pool:
+        for records in pool.map(_fetch_batch, batches):
+            all_records.extend(records)
 
-        df = pd.DataFrame(records)
-        # 勿缓存空结果：避免一次网络失败导致 15s 内接口持续无数据
-        if not df.empty:
-            _cache_set(cache_key, df, ttl=15)
-        return df
-    except Exception as e:
-        print(f"实时行情获取失败: {e}")
-        return pd.DataFrame()
+    df = pd.DataFrame(all_records)
+    if not df.empty:
+        _cache_set(cache_key, df, ttl=60)
+    return df
 
 
 def get_kline_hist(
@@ -839,19 +846,17 @@ def search_stocks(keyword: str) -> pd.DataFrame:
 
 def get_daily_hot_stocks(limit: int = 20) -> list:
     """当日个股人气榜（东方财富），返回含代码、名称、排名等；缓存为空时直接获取实时数据。"""
-    limit = max(1, min(int(limit), 50))
+    limit = max(1, int(limit))
     cache_key = f"hot:daily:{limit}"
     cached = _cache_get(cache_key)
     if cached is not None:
         return cached
-
-    # 缓存为空时，直接获取实时热门股票数据
     return _fetch_and_cache_hot(limit)
 
 
 def _fetch_and_cache_hot(limit: int = 20) -> list:
     """按优先级尝试多个来源获取热门股票：东方财富涨幅榜 → 同花顺 → 新浪人气榜。"""
-    limit = max(1, min(int(limit), 50))
+    limit = max(1, int(limit))
     cache_key = f"hot:daily:{limit}"
 
     # ① 东方财富涨幅榜（按涨跌幅）
@@ -879,49 +884,70 @@ def _fetch_and_cache_hot(limit: int = 20) -> list:
 
 
 def _fetch_em_hot_stocks(limit: int) -> list:
-    """东方财富涨幅榜（今日涨跌幅从高到低）"""
-    try:
-        js = _em_clist_request(
-            {
-                "pn": 1,
-                "pz": limit,
-                "po": 1,
-                "np": 1,
-                "fltt": 2,
-                "invt": 2,
-                "fid": "f3",
-                "fs": "m:0+t:6,m:0+t:13,m:1+t:2,m:1+t:23",
-                "fields": "f2,f3,f4,f12,f14",
-                "ut": "bd1d9ddb04089700cf9c27f6f7426281",
-            },
-            timeout=20.0,
-        )
-        if not js:
+    """东方财富涨幅榜（今日涨跌幅从高到低），并发分页，最多支持 1000 条。"""
+    PAGE_SIZE = 100
+    total_pages = (limit + PAGE_SIZE - 1) // PAGE_SIZE
+
+    def fetch_page(pn: int) -> list[dict]:
+        try:
+            js = _em_clist_request(
+                {
+                    "pn": pn,
+                    "pz": PAGE_SIZE,
+                    "po": 1,
+                    "np": 1,
+                    "fltt": 2,
+                    "invt": 2,
+                    "fid": "f3",
+                    "fs": "m:0+t:6,m:0+t:13,m:1+t:2,m:1+t:23",
+                    "fields": "f2,f3,f4,f12,f14",
+                    "ut": "bd1d9ddb04089700cf9c27f6f7426281",
+                },
+                timeout=20.0,
+            )
+            if not js:
+                return []
+            diff = (js.get("data") or {}).get("diff") or []
+            stocks = []
+            for row in diff:
+                try:
+                    price = float(row.get("f2", 0) or 0)
+                    chg = float(row.get("f3", 0) or 0)
+                except (TypeError, ValueError):
+                    price, chg = 0.0, 0.0
+                code = str(row.get("f12", "") or "").strip()
+                name = str(row.get("f14", "") or "").strip()
+                if not code:
+                    continue
+                stocks.append({
+                    "code": code.zfill(6),
+                    "name": name,
+                    "change_pct": round(chg, 2),
+                    "price": round(price, 2),
+                    "volume": 0,
+                })
+            return stocks
+        except Exception as e:
+            print(f"[热门-分页] 第 {pn} 页失败: {e}")
             return []
-        diff = (js.get("data") or {}).get("diff") or []
-        stocks = []
-        for idx, row in enumerate(diff, start=1):
+
+    all_stocks: list[dict] = []
+    with ThreadPoolExecutor(max_workers=min(total_pages, 10)) as pool:
+        futures = {pool.submit(fetch_page, pn): pn for pn in range(1, total_pages + 1)}
+        for future in as_completed(futures):
             try:
-                price = float(row.get("f2", 0) or 0)
-                chg = float(row.get("f3", 0) or 0)
-            except (TypeError, ValueError):
-                price, chg = 0.0, 0.0
-            code = str(row.get("f12", "") or "").strip()
-            name = str(row.get("f14", "") or "").strip()
-            if not code:
-                continue
-            stocks.append({
-                "rank": idx,
-                "code": code.zfill(6),
-                "name": name,
-                "change_pct": round(chg, 2),
-                "price": round(price, 2),
-                "volume": 0,
-            })
-        return stocks
-    except Exception as e:
-        print(f"[热门] 东方财富涨幅榜失败: {e}")
-        return []
+                page_stocks = future.result(timeout=25.0)
+                all_stocks.extend(page_stocks)
+            except Exception as e:
+                pn = futures[future]
+                print(f"[热门-分页] 第 {pn} 页超时/异常: {e}")
+
+    # 按涨幅降序重新编号
+    all_stocks.sort(key=lambda x: x.get("change_pct", 0), reverse=True)
+    for idx, s in enumerate(all_stocks, start=1):
+        s["rank"] = idx
+
+    return all_stocks[:limit]
 
 
 def _fetch_ths_hot_stocks(limit: int) -> list:

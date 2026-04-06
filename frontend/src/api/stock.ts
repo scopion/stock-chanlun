@@ -2,7 +2,7 @@ import axios from 'axios'
 
 const api = axios.create({
   baseURL: '/api',
-  timeout: 15000,
+  timeout: 60000,
 })
 
 // ─── Types ───────────────────────────────────────────────────────────────────
@@ -51,6 +51,24 @@ export interface Signal {
   stop_loss?: number
   take_profit?: number
   description: string
+}
+
+export interface StockScreenResult {
+  code: string
+  name: string
+  price: number
+  change_pct: number
+  volume: number
+  amount: number
+  industry: string | null
+  pe: number | null
+  pb: number | null
+  latest_signal: string | null
+  latest_signal_date: string | null
+  latest_signal_conf: number | null
+  has_dual_cross: boolean
+  dual_cross_date: string | null
+  trend: string
 }
 
 export interface SupportResistance {
@@ -279,6 +297,26 @@ export const stockApi = {
     return api.put<{ ai_model: string; ok: boolean }>('/settings', null, {
       params: { model },
     })
+  },
+
+  screenStocks(params: {
+    change_pct_min?: number
+    change_pct_max?: number
+    volume_min?: number
+    volume_max?: number
+    industry?: string
+    pe_max?: number
+    pb_max?: number
+    signals?: string
+    dual_cross?: boolean
+    level?: string
+    pool_size?: number
+  }) {
+    const size = params.pool_size ?? 100
+    return api.get<{ results: StockScreenResult[]; total: number }>(
+      '/stocks/screen',
+      { params, timeout: size >= 500 ? 180000 : 60000 }
+    )
   },
 }
 

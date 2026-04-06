@@ -5,6 +5,7 @@
         <router-link to="/" class="nav-brand">ChanStock</router-link>
         <div class="nav-links">
           <router-link to="/" class="nav-link">首页</router-link>
+          <router-link to="/screen" class="nav-link">选股</router-link>
           <router-link to="/watchlist" class="nav-link active">自选股</router-link>
         </div>
         <div class="nav-search" style="margin-left:auto">
