@@ -6,59 +6,18 @@
 import { ref, watch, onMounted, onUnmounted } from 'vue'
 import * as echarts from 'echarts'
 import type { KLine } from '../../api/stock'
+import { calcSKDJ } from '../../utils/stockIndicators'
 
 const props = defineProps<{ klines: KLine[] }>()
 
 const chartRef = ref<HTMLDivElement | null>(null)
 let chart: echarts.ECharts | null = null
 
-/** 通达信风格：RSV + SMA(RSV,3,1)、SMA(SK,3,1) 得到 SK、SD */
-function calcSKDJ(
-  highs: number[],
-  lows: number[],
-  closes: number[],
-  n = 9,
-  smoothN = 3,
-  smoothM = 1
-) {
-  const len = closes.length
-  const rsv: (number | null)[] = new Array(len).fill(null)
-  for (let i = n - 1; i < len; i++) {
-    let ln = Infinity
-    let hn = -Infinity
-    for (let j = i - n + 1; j <= i; j++) {
-      if (lows[j] < ln) ln = lows[j]
-      if (highs[j] > hn) hn = highs[j]
-    }
-    rsv[i] = hn === ln ? 50 : ((closes[i] - ln) / (hn - ln)) * 100
-  }
-
-  const sk: (number | null)[] = new Array(len).fill(null)
-  let prevSk: number | null = null
-  for (let i = 0; i < len; i++) {
-    const r = rsv[i]
-    if (r == null) continue
-    prevSk = prevSk == null ? r : (smoothM * r + (smoothN - smoothM) * prevSk) / smoothN
-    sk[i] = prevSk
-  }
-
-  const sd: (number | null)[] = new Array(len).fill(null)
-  let prevSd: number | null = null
-  for (let i = 0; i < len; i++) {
-    const s = sk[i]
-    if (s == null) continue
-    prevSd = prevSd == null ? s : (smoothM * s + (smoothN - smoothM) * prevSd) / smoothN
-    sd[i] = prevSd
-  }
-
-  return { sk, sd }
-}
-
 function buildOption() {
   if (props.klines.length < 12) return {}
-  const highs = props.klines.map(k => k.high)
-  const lows = props.klines.map(k => k.low)
-  const closes = props.klines.map(k => k.close)
+  const highs = props.klines.map(k => Number(k.high))
+  const lows = props.klines.map(k => Number(k.low))
+  const closes = props.klines.map(k => Number(k.close))
   const { sk, sd } = calcSKDJ(highs, lows, closes)
   const dates = props.klines.map(k => k.date.slice(0, 10))
 

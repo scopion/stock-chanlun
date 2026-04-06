@@ -130,6 +130,102 @@ def hot_stocks(limit: int = Query(15, ge=1, le=50)):
     return {"stocks": stocks, "total": len(stocks), "error": None if stocks else "获取失败，请稍后重试"}
 
 
+@app.get("/api/stocks/screen", tags=["选股"])
+def screen_stocks_api(
+    change_pct_min: Optional[float] = Query(None, description="最小涨跌幅（%）"),
+    change_pct_max: Optional[float] = Query(None, description="最大涨跌幅（%）"),
+    volume_min: Optional[float] = Query(None, description="最小成交量（手）"),
+    volume_max: Optional[float] = Query(None, description="最大成交量（手）"),
+    industry: Optional[str] = Query(None, description="行业板块名称（精确匹配）"),
+    pe_max: Optional[float] = Query(None, description="市盈率上限"),
+    pb_max: Optional[float] = Query(None, description="市净率上限"),
+    signals: Optional[str] = Query(None, description="逗号分隔买卖点类型，如 一买,二买"),
+    dual_cross: bool = Query(False, description="是否必须 MACD+SKDJ 双金叉共振"),
+    level: str = Query("daily", pattern="^(1min|5min|15min|30min|60min|daily|weekly|monthly)$"),
+    pool_size: int = Query(100, ge=10, le=1000, description="候选池大小（最高 1000）"),
+):
+    """
+    选股接口 — 按基础指标、缠论买卖点、MACD+SKDJ 双金叉共振筛选股票。
+
+    signals 逗号分隔，支持：一买、二买、三买、一卖、二卖、三卖
+    """
+    import ast
+    from services.screening_service import screen_stocks
+
+    signal_types: list[str] | None = None
+    if signals:
+        raw = [s.strip() for s in signals.split(",") if s.strip()]
+        if raw:
+            signal_types = raw
+
+    results = screen_stocks(
+        change_pct_min=change_pct_min,
+        change_pct_max=change_pct_max,
+        volume_min=volume_min,
+        volume_max=volume_max,
+        industry=industry,
+        pe_max=pe_max,
+        pb_max=pb_max,
+        signal_types=signal_types,
+        require_dual_cross=dual_cross,
+        level=level,
+        pool_size=pool_size,
+    )
+    return {"results": results, "total": len(results)}
+
+
+@app.get("/api/stocks/screen-stream", tags=["选股"])
+def screen_stocks_stream_api(
+    change_pct_min: Optional[float] = Query(None, description="最小涨跌幅（%）"),
+    change_pct_max: Optional[float] = Query(None, description="最大涨跌幅（%）"),
+    volume_min: Optional[float] = Query(None, description="最小成交量（手）"),
+    volume_max: Optional[float] = Query(None, description="最大成交量（手）"),
+    industry: Optional[str] = Query(None, description="行业板块名称（精确匹配）"),
+    pe_max: Optional[float] = Query(None, description="市盈率上限"),
+    pb_max: Optional[float] = Query(None, description="市净率上限"),
+    signals: Optional[str] = Query(None, description="逗号分隔买卖点类型，如 一买,二买"),
+    dual_cross: bool = Query(False, description="是否必须 MACD+SKDJ 双金叉共振"),
+    level: str = Query("daily", pattern="^(1min|5min|15min|30min|60min|daily|weekly|monthly)$"),
+    pool_size: int = Query(100, ge=10, le=1000, description="候选池大小（最高 1000）"),
+    max_results: int = Query(50, ge=1, le=200, description="最多返回条数"),
+):
+    """
+    SSE 流式选股接口 — 边分析边推送结果，前端可实时增量展示，无超时问题。
+    """
+    from services.screening_service import screen_stocks_stream
+    import json
+
+    signal_types: list[str] | None = None
+    if signals:
+        raw = [s.strip() for s in signals.split(",") if s.strip()]
+        if raw:
+            signal_types = raw
+
+    async def event_stream():
+        for item in screen_stocks_stream(
+            change_pct_min=change_pct_min,
+            change_pct_max=change_pct_max,
+            volume_min=volume_min,
+            volume_max=volume_max,
+            industry=industry,
+            pe_max=pe_max,
+            pb_max=pb_max,
+            signal_types=signal_types,
+            require_dual_cross=dual_cross,
+            level=level,
+            pool_size=pool_size,
+            max_results=max_results,
+        ):
+            yield f"data: {json.dumps(item, ensure_ascii=False)}\n\n"
+
+    return StreamingResponse(
+        event_stream(),
+        media_type="text/event-stream",
+        headers={
+            "Cache-Control": "no-cache",
+            "X-Accel-Buffering": "no",
+        },
+    )
 @app.get("/api/market/overview", tags=["数据"])
 def market_overview():
     """大盘概览：主要指数、A股涨跌家数、行业板块领涨/领跌"""
