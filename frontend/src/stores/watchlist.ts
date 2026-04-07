@@ -6,6 +6,7 @@ export const useWatchlistStore = defineStore('watchlist', () => {
   const stocks = ref<Quote[]>([])
   const loading = ref(false)
   const error = ref<string | null>(null)
+  const lastUpdated = ref<Date | null>(null)
 
   const sortedByChange = computed(() =>
     [...stocks.value].sort((a, b) => b.change_pct - a.change_pct)
@@ -21,6 +22,7 @@ export const useWatchlistStore = defineStore('watchlist', () => {
     try {
       const res = await stockApi.watchlist()
       stocks.value = res.data.stocks || []
+      lastUpdated.value = new Date()
     } catch (e: any) {
       error.value = e.message
     } finally {
@@ -46,6 +48,6 @@ export const useWatchlistStore = defineStore('watchlist', () => {
     }
   }
 
-  return { stocks, loading, error, sortedByChange, hasSignals,
+  return { stocks, loading, error, lastUpdated, sortedByChange, hasSignals,
            fetchWatchlist, addStock, removeStock }
 })

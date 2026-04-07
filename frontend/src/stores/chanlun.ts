@@ -46,19 +46,21 @@ export const useChanlunStore = defineStore('chanlun', () => {
   const loadingKline = ref(false)
   const loadingChanlun = ref(false)
   const loadingAI = ref(false)
-  const error = ref<string | null>(null)
+  const errorKline = ref<string | null>(null)
+  const errorChanlun = ref<string | null>(null)
+  const errorAI = ref<string | null>(null)
   const currentLevel = ref<LevelOption>('daily')
   const aiModel = ref<string>('deepseek')
   const indicators = ref<IndicatorConfig>({ ...defaultIndicators })
 
   async function fetchKline(code: string, level: LevelOption = 'daily') {
     loadingKline.value = true
-    error.value = null
+    errorKline.value = null
     try {
       const res = await stockApi.kline(code, level)
       klines.value = res.data.klines || []
     } catch (e: any) {
-      error.value = e.message
+      errorKline.value = e.message
     } finally {
       loadingKline.value = false
     }
@@ -66,11 +68,12 @@ export const useChanlunStore = defineStore('chanlun', () => {
 
   async function fetchChanlun(code: string, level: LevelOption = 'daily') {
     loadingChanlun.value = true
+    errorChanlun.value = null
     try {
       const res = await stockApi.chanlun(code, level)
       chanlunResult.value = res.data
     } catch (e: any) {
-      error.value = e.message
+      errorChanlun.value = e.message
     } finally {
       loadingChanlun.value = false
     }
@@ -78,11 +81,12 @@ export const useChanlunStore = defineStore('chanlun', () => {
 
   async function fetchAISignal(code: string, level: LevelOption = 'daily') {
     loadingAI.value = true
+    errorAI.value = null
     try {
       const res = await stockApi.aiSignal(code, level, aiModel.value)
       aiSignal.value = res.data
     } catch (e: any) {
-      error.value = e.message
+      errorAI.value = e.message
     } finally {
       loadingAI.value = false
     }
@@ -115,7 +119,8 @@ export const useChanlunStore = defineStore('chanlun', () => {
   return {
     klines, chanlunResult, aiSignal,
     loadingKline, loadingChanlun, loadingAI,
-    error, currentLevel, aiModel, indicators,
+    errorKline, errorChanlun, errorAI,
+    currentLevel, aiModel, indicators,
     fetchKline, fetchChanlun, fetchAISignal, loadAll, setAiModel,
     toggleIndicator, setIndicator
   }

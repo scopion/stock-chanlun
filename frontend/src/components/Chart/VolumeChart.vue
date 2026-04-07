@@ -7,13 +7,14 @@ import { ref, watch, onMounted, onUnmounted } from 'vue'
 import * as echarts from 'echarts'
 import type { KLine } from '../../api/stock'
 
-const props = defineProps<{ klines: KLine[] }>()
+const props = defineProps<{ klines: KLine[]; zoomStart?: number; zoomEnd?: number }>()
 
 const chartRef = ref<HTMLDivElement | null>(null)
 let chart: echarts.ECharts | null = null
 
 const COLOR_UP = '#f85149'
 const COLOR_DOWN = '#3fb950'
+const zoomId = `vol-zoom-${Math.random().toString(36).slice(2)}`
 
 function buildOption() {
   if (props.klines.length < 1) return {}
@@ -24,6 +25,8 @@ function buildOption() {
     const prev = props.klines[i - 1].close
     return k.close >= prev ? COLOR_UP : COLOR_DOWN
   })
+  const s = props.zoomStart ?? 0
+  const e = props.zoomEnd ?? 100
 
   return {
     animation: false,
@@ -46,6 +49,9 @@ function buildOption() {
         }
       }
     }],
+    dataZoom: [
+      { id: zoomId, type: 'slider', xAxisIndex: 0, start: s, end: e, show: false }
+    ],
     series: [{
       name: '成交量',
       type: 'bar',
@@ -80,7 +86,7 @@ onMounted(() => {
 })
 onUnmounted(() => { chart?.dispose() })
 
-watch(() => props.klines, () => {
+watch([() => props.klines, () => props.zoomStart, () => props.zoomEnd], () => {
   if (!chart) return
   chart.setOption(buildOption(), { notMerge: true })
 }, { deep: true })

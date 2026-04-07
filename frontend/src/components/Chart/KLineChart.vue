@@ -50,6 +50,10 @@ type ChanlunOverlayPayload = {
 }
 let chanlunOverlayCache: ChanlunOverlayPayload | null = null
 
+const emit = defineEmits<{
+  zoomChange: [start: number, end: number]
+}>()
+
 /** 统一成 YYYY-MM-DD */
 function normDay(s: string): string {
   return s.replace('T', ' ').trim().slice(0, 10)
@@ -212,7 +216,8 @@ function buildOption() {
       { type: 'inside', xAxisIndex: 0, start: 70, end: 100 },
       { type: 'slider', xAxisIndex: 0, start: 70, end: 100, height: 20, bottom: 5,
         borderColor: '#30363d', fillerColor: 'rgba(88,166,255,0.1)',
-        handleStyle: { color: '#58a6ff' }, textStyle: { color: '#7d8590' } }
+        handleStyle: { color: '#58a6ff' }, textStyle: { color: '#7d8590' }
+      }
     ],
     series: seriesList,
     tooltip: {
@@ -538,6 +543,10 @@ function onChartFinished() {
 
 function onChartDataZoom() {
   queueChanlunGraphic()
+  const dz = (chart as any).getOption()?.dataZoom?.[0]
+  if (dz && dz.start != null && dz.end != null) {
+    emit('zoomChange', dz.start, dz.end)
+  }
 }
 
 function onAxisPointerUpdate(ev: unknown) {
@@ -559,7 +568,7 @@ function onChartGlobalOut() {
 function initChart() {
   if (!chartRef.value) return
   chart = echarts.init(chartRef.value)
-  chart.setOption(buildOption(), { notMerge: true })
+  chart.setOption(buildOption())
   setBarInfoByIndex(props.klines.length - 1)
   chart.getZr().on('globalout', onChartGlobalOut)
   chart.on('updateAxisPointer', onAxisPointerUpdate)
@@ -570,7 +579,7 @@ function initChart() {
 
 function updateChart() {
   if (!chart) return
-  chart.setOption(buildOption(), { notMerge: true })
+  chart.setOption(buildOption())
   setBarInfoByIndex(props.klines.length - 1)
   queueChanlunGraphic()
 }

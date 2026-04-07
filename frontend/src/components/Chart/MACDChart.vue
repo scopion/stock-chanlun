@@ -8,10 +8,12 @@ import * as echarts from 'echarts'
 import type { KLine } from '../../api/stock'
 import { calcMACD } from '../../utils/stockIndicators'
 
-const props = defineProps<{ klines: KLine[] }>()
+const props = defineProps<{ klines: KLine[]; zoomStart?: number; zoomEnd?: number }>()
 
 const chartRef = ref<HTMLDivElement | null>(null)
 let chart: echarts.ECharts | null = null
+
+const zoomId = `macd-zoom-${Math.random().toString(36).slice(2)}`
 
 function buildOption() {
   if (props.klines.length < 30) return {}
@@ -19,6 +21,8 @@ function buildOption() {
   const { dif, dea } = calcMACD(closes)
   const bar = dif.map((v, i) => (v - dea[i]) * 2)
   const dates = props.klines.map(k => k.date.slice(0, 10))
+  const s = props.zoomStart ?? 0
+  const e = props.zoomEnd ?? 100
 
   return {
     animation: false,
@@ -34,6 +38,9 @@ function buildOption() {
       splitLine: { lineStyle: { color: '#21262d', type: 'dashed' } },
       axisLabel: { color: '#7d8590', fontSize: 9 }
     }],
+    dataZoom: [
+      { id: zoomId, type: 'slider', xAxisIndex: 0, start: s, end: e, show: false }
+    ],
     series: [
       { name: 'DIF', type: 'line', data: dif, lineStyle: { color: '#58a6ff', width: 1 } },
       { name: 'DEA', type: 'line', data: dea, lineStyle: { color: '#d29922', width: 1 } },
@@ -62,7 +69,7 @@ onMounted(() => {
 })
 onUnmounted(() => { chart?.dispose() })
 
-watch(() => props.klines, () => {
+watch([() => props.klines, () => props.zoomStart, () => props.zoomEnd], () => {
   if (!chart) return
   chart.setOption(buildOption(), { notMerge: true })
 }, { deep: true })

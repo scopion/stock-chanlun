@@ -19,6 +19,16 @@
       <div class="watchlist-header">
         <h1>自选股监控</h1>
         <span class="count-badge">{{ store.stocks.length }} 支</span>
+        <span v-if="store.lastUpdated" class="update-time">
+          更新于 {{ formatTime(store.lastUpdated) }}
+        </span>
+        <button class="btn btn-ghost btn-sm" @click="store.fetchWatchlist()" :disabled="store.loading" style="margin-left:auto">
+          <svg width="12" height="12" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2">
+            <polyline points="23 4 23 10 17 10"/><polyline points="1 20 1 14 7 14"/>
+            <path d="M3.51 9a9 9 0 0 1 14.85-3.36L23 10M1 14l4.64 4.36A9 9 0 0 0 20.49 15"/>
+          </svg>
+          刷新
+        </button>
       </div>
 
       <div v-if="store.loading" class="loading-state">
@@ -74,6 +84,12 @@ const router = useRouter()
 const store = useWatchlistStore()
 const addCode = ref('')
 
+function formatTime(d: Date): string {
+  const h = String(d.getHours()).padStart(2, '0')
+  const m = String(d.getMinutes()).padStart(2, '0')
+  return `${h}:${m}`
+}
+
 function goToStock(code: string) { router.push(`/stock/${code}`) }
 
 async function addStock() {
@@ -107,7 +123,7 @@ onMounted(() => store.fetchWatchlist())
 
 .container { max-width: 900px; margin: 40px auto; padding: 0 24px; }
 
-.watchlist-header { display: flex; align-items: center; gap: 16px; margin-bottom: 32px; }
+.watchlist-header { display: flex; align-items: center; gap: 12px; margin-bottom: 32px; flex-wrap: wrap; }
 .watchlist-header h1 { font-size: 1.5rem; }
 .count-badge {
   background: var(--bg-card);
@@ -116,6 +132,10 @@ onMounted(() => store.fetchWatchlist())
   padding: 4px 12px;
   font-size: 0.8rem;
   color: var(--text-secondary);
+}
+.update-time {
+  font-size: 0.75rem;
+  color: var(--text-muted);
 }
 
 .loading-state { display: flex; align-items: center; justify-content: center; gap: 12px; padding: 80px; color: var(--text-secondary); }

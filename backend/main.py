@@ -23,6 +23,9 @@ print("[补丁] requests: timeout=12s + 禁用代理 for eastmoney")
 
 import math
 import os
+import json
+import uuid
+from datetime import datetime, timezone
 
 # 加载 .env 环境变量
 try:
@@ -30,7 +33,6 @@ try:
     load_dotenv()
 except ImportError:
     pass  # 未安装 python-dotenv 时忽略
-import json
 from pathlib import Path
 from fastapi import FastAPI, Query, HTTPException
 from fastapi.middleware.cors import CORSMiddleware
@@ -591,6 +593,96 @@ def remove_watchlist(code: str):
         _watchlist.remove(sym)
         _save_watchlist(_watchlist)
     return {"code": sym, "removed": True, "total": len(_watchlist)}
+
+
+# ─── 评论笔记 API（持久化到 JSON 文件）────────────────────────────────────
+
+_COMMENTS_FILE = Path(__file__).parent / "comments.json"
+
+
+def _load_comments() -> dict[str, list[dict]]:
+    """返回 {stock_code: [comment, ...]}"""
+    try:
+        if _COMMENTS_FILE.exists():
+            return json.loads(_COMMENTS_FILE.read_text(encoding="utf-8"))
+    except Exception as e:
+        print(f"[评论] 加载失败: {e}")
+    return {}
+
+
+def _save_comments(data: dict[str, list[dict]]):
+    try:
+        _COMMENTS_FILE.write_text(json.dumps(data, ensure_ascii=False, indent=2), encoding="utf-8")
+    except Exception as e:
+        print(f"[评论] 保存失败: {e}")
+
+
+_comments: dict[str, list[dict]] = _load_comments()
+
+
+@app.get("/api/comments/{stock_code}", tags=["评论"])
+def get_comments(stock_code: str):
+    """获取指定股票的全部笔记（按日期降序）"""
+    sym, _ = normalize_stock_code(stock_code)
+    items = _comments.get(sym, [])
+    # 按 createdAt 降序
+    items = sorted(items, key=lambda x: x.get("createdAt", ""), reverse=True)
+    return {"comments": items, "total": len(items)}
+
+
+@app.post("/api/comments/{stock_code}", tags=["评论"])
+def add_comment(stock_code: str, comment_in: dict):
+    """新增笔记"""
+    sym, _ = normalize_stock_code(stock_code)
+    content = (comment_in.get("content") or "").strip()
+    if not content:
+        raise HTTPException(status_code=400, detail="笔记内容不能为空")
+
+    now = datetime.utcnow().isoformat() + "Z"
+    comment = {
+        "id": str(uuid.uuid4()),
+        "stockCode": sym,
+        "content": content,
+        "createdAt": now,
+        "updatedAt": now,
+    }
+    if sym not in _comments:
+        _comments[sym] = []
+    _comments[sym].append(comment)
+    _save_comments(_comments)
+    return {"comment": comment, "added": True}
+
+
+@app.put("/api/comments/{stock_code}/{comment_id}", tags=["评论"])
+def update_comment(stock_code: str, comment_id: str, comment_in: dict):
+    """更新笔记"""
+    sym, _ = normalize_stock_code(stock_code)
+    content = (comment_in.get("content") or "").strip()
+    if not content:
+        raise HTTPException(status_code=400, detail="笔记内容不能为空")
+
+    items = _comments.get(sym, [])
+    for c in items:
+        if c.get("id") == comment_id:
+            c["content"] = content
+            c["updatedAt"] = datetime.utcnow().isoformat() + "Z"
+            _save_comments(_comments)
+            return {"comment": c, "updated": True}
+    raise HTTPException(status_code=404, detail="笔记不存在")
+
+
+@app.delete("/api/comments/{stock_code}/{comment_id}", tags=["评论"])
+def delete_comment(stock_code: str, comment_id: str):
+    """删除笔记"""
+    sym, _ = normalize_stock_code(stock_code)
+    items = _comments.get(sym, [])
+    original = len(items)
+    items = [c for c in items if c.get("id") != comment_id]
+    if len(items) == original:
+        raise HTTPException(status_code=404, detail="笔记不存在")
+    _comments[sym] = items
+    _save_comments(_comments)
+    return {"id": comment_id, "deleted": True}
 
 
 # ─── AI 模型设置 ──────────────────────────────────────────────────────────

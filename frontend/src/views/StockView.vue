@@ -35,9 +35,17 @@
       </div>
     </nav>
 
-    <div v-if="loadingAny" class="loading-state">
-      <div class="spinner" />
-      <span>分析中...</span>
+    <!-- 全局加载骨架屏 -->
+    <div v-if="loadingAny" class="loading-overlay">
+      <div class="loading-progress">
+        <div class="loading-steps">
+          <div v-for="step in loadingSteps" :key="step.key" class="loading-step" :class="step.status">
+            <div class="step-dot" />
+            <span class="step-label">{{ step.label }}</span>
+          </div>
+        </div>
+        <div class="spinner" />
+      </div>
     </div>
 
     <div v-else-if="error" class="error-page">
@@ -166,11 +174,12 @@
           :ai-signal="store.aiSignal"
           :support-resistance="store.chanlunResult?.supportResistance || []"
           :indicators="store.indicators"
+          @zoom-change="onZoomChange"
         />
-        <VolumeChart v-if="store.indicators.volume" :klines="store.klines" class="sub-chart" />
-        <MACDChart v-if="store.indicators.macd" :klines="store.klines" class="sub-chart" />
-        <RSIChart v-if="store.indicators.rsi" :klines="store.klines" class="sub-chart" />
-        <SKDJChart v-if="store.indicators.skdj" :klines="store.klines" class="sub-chart" />
+        <VolumeChart v-if="store.indicators.volume" :klines="store.klines" :zoom-start="zoomStart" :zoom-end="zoomEnd" class="sub-chart" />
+        <MACDChart v-if="store.indicators.macd" :klines="store.klines" :zoom-start="zoomStart" :zoom-end="zoomEnd" class="sub-chart" />
+        <RSIChart v-if="store.indicators.rsi" :klines="store.klines" :zoom-start="zoomStart" :zoom-end="zoomEnd" class="sub-chart" />
+        <SKDJChart v-if="store.indicators.skdj" :klines="store.klines" :zoom-start="zoomStart" :zoom-end="zoomEnd" class="sub-chart" />
       </div>
 
       <!-- 盘口 / 板块 / 个股新闻（K 线与策略之间的竖栏） -->
@@ -249,8 +258,9 @@
         </div>
       </aside>
 
-      <!-- Right: AI Strategy -->
+      <!-- Right: AI Strategy + Notes -->
       <aside class="sidebar-right">
+        <CommentSection :stock-code="stockCode" />
         <StrategyCard :signal="store.aiSignal" />
       </aside>
     </div>
@@ -261,6 +271,7 @@
 import { ref, computed, onMounted, watch } from 'vue'
 import { useRoute } from 'vue-router'
 import { useChanlunStore, type LevelOption } from '../stores/chanlun'
+import { useCommentStore } from '../stores/comment'
 import { stockApi, type StockInfoFields, type StockExtras, type Quote } from '../api/stock'
 import KLineChart from '../components/Chart/KLineChart.vue'
 import VolumeChart from '../components/Chart/VolumeChart.vue'
@@ -270,17 +281,36 @@ import SKDJChart from '../components/Chart/SKDJChart.vue'
 import SignalCard from '../components/Signal/SignalCard.vue'
 import StrategyCard from '../components/Signal/StrategyCard.vue'
 import IndicatorSelector from '../components/IndicatorSelector.vue'
+import CommentSection from '../components/Signal/CommentSection.vue'
 
 const route = useRoute()
 const store = useChanlunStore()
+const commentStore = useCommentStore()
 const klineChartRef = ref<InstanceType<typeof KLineChart> | null>(null)
+
+const zoomStart = ref(0)
+const zoomEnd = ref(100)
+
+function onZoomChange(start: number, end: number) {
+  zoomStart.value = start
+  zoomEnd.value = end
+}
 
 const stockCode = computed(() => route.params.code as string)
 const currentLevel = computed(() => store.currentLevel)
 const loadingAny = computed(() =>
   store.loadingKline || store.loadingChanlun || store.loadingAI
 )
-const error = computed(() => store.error)
+
+const loadingSteps = computed(() => [
+  { key: 'kline', label: 'K线数据', status: store.loadingKline ? 'loading' : store.klines.length ? 'done' : 'pending' },
+  { key: 'chanlun', label: '缠论分析', status: store.loadingChanlun ? 'loading' : store.chanlunResult ? 'done' : 'pending' },
+  { key: 'ai', label: 'AI策略', status: store.loadingAI ? 'loading' : store.aiSignal ? 'done' : 'pending' },
+])
+
+const error = computed(() =>
+  store.errorKline || store.errorChanlun || store.errorAI
+)
 const quote = ref<Quote | null>(null)
 const stockInfo = ref<StockInfoFields | null>(null)
 const extras = ref<StockExtras | null>(null)
@@ -449,6 +479,9 @@ async function loadData() {
   } else stockInfo.value = null
   if (settled[2].status === 'fulfilled') extras.value = settled[2].value.data
   else extras.value = null
+
+  // 加载评论笔记
+  commentStore.fetchComments(code)
 }
 
 async function changeLevel(level: LevelOption) {
@@ -487,14 +520,65 @@ watch(() => route.params.code, loadData)
 
 .nav-actions { display: flex; gap: 8px; margin-left: auto; }
 
-.loading-state {
+.loading-overlay {
+  position: fixed;
+  inset: 0;
+  z-index: 999;
+  background: var(--bg-base);
   display: flex;
   align-items: center;
   justify-content: center;
-  gap: 12px;
-  height: 50vh;
-  color: var(--text-secondary);
 }
+
+.loading-progress {
+  display: flex;
+  flex-direction: column;
+  align-items: center;
+  gap: 24px;
+}
+
+.loading-steps {
+  display: flex;
+  flex-direction: column;
+  gap: 12px;
+  min-width: 200px;
+}
+
+.loading-step {
+  display: flex;
+  align-items: center;
+  gap: 10px;
+}
+
+.step-dot {
+  width: 8px;
+  height: 8px;
+  border-radius: 50%;
+  flex-shrink: 0;
+  transition: background 0.3s;
+}
+
+.loading-step.pending .step-dot { background: var(--border); }
+.loading-step.loading .step-dot {
+  background: var(--accent-blue);
+  animation: pulse 1s ease-in-out infinite;
+}
+.loading-step.done .step-dot { background: var(--accent-green); }
+
+.step-label {
+  font-size: 0.85rem;
+  transition: color 0.3s;
+}
+.loading-step.pending .step-label { color: var(--text-muted); }
+.loading-step.loading .step-label { color: var(--text-primary); }
+.loading-step.done .step-label { color: var(--accent-green); }
+
+@keyframes pulse {
+  0%, 100% { opacity: 1; transform: scale(1); }
+  50% { opacity: 0.5; transform: scale(0.8); }
+}
+
+@keyframes spin { to { transform: rotate(360deg); } }
 .spinner {
   width: 24px;
   height: 24px;
@@ -503,7 +587,6 @@ watch(() => route.params.code, loadData)
   border-radius: 50%;
   animation: spin 0.8s linear infinite;
 }
-@keyframes spin { to { transform: rotate(360deg); } }
 
 .error-page {
   text-align: center;
@@ -523,6 +606,16 @@ watch(() => route.params.code, loadData)
 }
 
 .sidebar, .sidebar-right, .chart-rail { display: flex; flex-direction: column; gap: 12px; }
+
+.sidebar-right {
+  min-width: 0;
+  max-height: calc(100vh - 72px);
+  overflow-y: auto;
+  scrollbar-width: thin;
+  scrollbar-color: var(--border) transparent;
+}
+.sidebar-right::-webkit-scrollbar { width: 5px; }
+.sidebar-right::-webkit-scrollbar-thumb { background: var(--border); border-radius: 4px; }
 
 .chart-rail {
   min-width: 0;

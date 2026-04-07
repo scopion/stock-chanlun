@@ -167,7 +167,7 @@
             </thead>
             <tbody>
               <tr
-                v-for="stock in results"
+                v-for="stock in results.slice(0, displayLimit)"
                 :key="stock.code"
                 class="result-row"
                 @click="goToStock(stock.code)"
@@ -198,6 +198,13 @@
               </tr>
             </tbody>
           </table>
+
+          <!-- 加载更多 -->
+          <div v-if="results.length > displayLimit" class="load-more">
+            <button class="btn btn-ghost" @click="displayLimit += PAGE_SIZE">
+              加载更多（{{ results.length - displayLimit }} 条剩余）
+            </button>
+          </div>
         </div>
       </main>
     </div>
@@ -215,6 +222,8 @@ const hasSearched = ref(false)
 const results = ref<StockScreenResult[]>([])
 const selectedSignals = ref<string[]>([])
 const progress = ref({ done: 0, total: 0 })
+const PAGE_SIZE = 20
+const displayLimit = ref(PAGE_SIZE)
 
 const params = reactive({
   change_pct_min: null as number | null,
@@ -268,6 +277,7 @@ async function runScreen() {
   loading.value = true
   hasSearched.value = true
   results.value = []
+  displayLimit.value = PAGE_SIZE
   progress.value = { done: 0, total: 0 }
 
   const p = buildParams()
@@ -281,7 +291,7 @@ async function runScreen() {
   if (p.pb_max != null) qs.set('pb_max', String(p.pb_max))
   if (p.signals) qs.set('signals', p.signals)
   qs.set('dual_cross', String(!!p.dual_cross))
-  qs.set('level', p.level)
+  qs.set('level', p.level ?? 'daily')
   qs.set('pool_size', String(p.pool_size))
   qs.set('max_results', '50')
 
@@ -614,6 +624,12 @@ function trendClass(trend: string): string {
 .trend-up { color: var(--accent-red); }
 .trend-down { color: var(--accent-green); }
 .trend-neutral { color: var(--text-secondary); }
+
+/* Load more */
+.load-more {
+  padding: 16px;
+  text-align: center;
+}
 
 /* Responsive */
 @media (max-width: 768px) {

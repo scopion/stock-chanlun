@@ -217,7 +217,13 @@ export interface AISignal {
   }
 }
 
-// ─── API Methods ────────────────────────────────────────────────────────────
+export interface Comment {
+  id: string
+  stockCode: string
+  content: string
+  createdAt: string
+  updatedAt: string
+}
 
 export const stockApi = {
   search(q: string) {
@@ -316,6 +322,32 @@ export const stockApi = {
     return api.get<{ results: StockScreenResult[]; total: number }>(
       '/stocks/screen',
       { params, timeout: size >= 500 ? 180000 : 60000 }
+    )
+  },
+
+  // ─── 评论笔记 ────────────────────────────────────────────────────────────
+
+  getComments(code: string) {
+    return api.get<{ comments: Comment[]; total: number }>(`/comments/${code}`)
+  },
+
+  addComment(code: string, content: string) {
+    return api.post<{ comment: Comment; added: boolean }>(
+      `/comments/${code}`,
+      { content }
+    )
+  },
+
+  updateComment(code: string, commentId: string, content: string) {
+    return api.put<{ comment: Comment; updated: boolean }>(
+      `/comments/${code}/${commentId}`,
+      { content }
+    )
+  },
+
+  deleteComment(code: string, commentId: string) {
+    return api.delete<{ id: string; deleted: boolean }>(
+      `/comments/${code}/${commentId}`
     )
   },
 }

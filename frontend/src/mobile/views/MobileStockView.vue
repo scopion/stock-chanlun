@@ -1,0 +1,422 @@
+<template>
+  <div class="stock-view">
+    <div v-if="loadingAny" class="page-loading">
+      <div class="spinner" />
+      <span>分析中，请稍候...</span>
+    </div>
+
+    <div v-else-if="error" class="page-error">
+      <p>{{ error }}</p>
+      <button class="btn btn-primary" @click="loadData">重试</button>
+    </div>
+
+    <template v-else>
+      <div class="stock-header card">
+        <div class="sh-left">
+          <div class="sh-name">{{ headerQuote?.name || stockCode }}</div>
+          <div class="sh-code mono">{{ stockCode }}</div>
+        </div>
+        <div class="sh-right">
+          <div class="sh-price mono">{{ headerQuote?.price != null ? headerQuote.price.toFixed(2) : '—' }}</div>
+          <div class="sh-change mono" :class="changeClass">{{ changeText }}</div>
+        </div>
+      </div>
+
+      <div class="chart-section">
+        <MobileKLineChart
+          :klines="store.klines"
+          :bis="store.chanlunResult?.bis || []"
+          :xiangs="store.chanlunResult?.xiangs || []"
+          :zhongshus="store.chanlunResult?.zhongshus || []"
+          :signals="store.chanlunResult?.signals || []"
+          :ai-signal="store.aiSignal"
+          :support-resistance="store.chanlunResult?.supportResistance || []"
+          :indicators="store.indicators"
+          :zoom-start="zoomStart"
+          :zoom-end="zoomEnd"
+          :loading="store.loadingKline"
+          @zoom-change="onZoomChange"
+        />
+      </div>
+
+      <div class="chart-controls">
+        <div class="level-tabs">
+          <button
+            v-for="lv in levels"
+            :key="lv.value"
+            class="level-tab"
+            :class="{ active: currentLevel === lv.value }"
+            @click="changeLevel(lv.value)"
+          >{{ lv.label }}</button>
+        </div>
+        <MobileIndicatorSelector />
+        <button class="btn btn-ghost btn-sm" @click="showSheet = true">详情</button>
+      </div>
+
+      <div v-if="store.chanlunResult?.signals?.length" class="signals-preview">
+        <div class="sp-head">
+          <span class="sp-title">缠论信号</span>
+          <span class="sp-count">{{ store.chanlunResult.signals.length }} 个</span>
+          <button
+            v-if="store.chanlunResult.signals.length > 3"
+            class="expand-btn"
+            @click="signalsExpanded = !signalsExpanded"
+          >
+            {{ signalsExpanded ? '收起' : `查看全部(${store.chanlunResult.signals.length})` }}
+            <svg width="12" height="12" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2"
+              :style="{ transform: signalsExpanded ? 'rotate(180deg)' : '' }">
+              <polyline points="6 9 12 15 18 9"/>
+            </svg>
+          </button>
+        </div>
+        <div class="sp-list">
+          <div
+            v-for="(sig, idx) in store.chanlunResult.signals.slice(0, signalsExpanded ? undefined : 3)"
+            :key="idx"
+            class="sp-item"
+            :class="signalBadgeClass(sig.type)"
+          >
+            <span class="sp-badge badge" :class="signalBadgeClass(sig.type)">{{ sig.type }}</span>
+            <span class="sp-desc">{{ sig.description }}</span>
+          </div>
+        </div>
+      </div>
+
+      <div class="action-bar">
+        <button class="btn btn-ghost" @click="loadData" :disabled="loadingAny">
+          <svg width="14" height="14" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2">
+            <polyline points="23 4 23 10 17 10"/><polyline points="1 20 1 14 7 14"/>
+            <path d="M3.51 9a9 9 0 0 1 14.85-3.36L23 10M1 14l4.64 4.36A9 9 0 0 0 20.49 15"/>
+          </svg>
+          刷新
+        </button>
+        <button class="btn" :class="isWatching ? 'btn-danger' : 'btn-primary'" @click="toggleWatch">
+          {{ isWatching ? '取消自选' : '+自选' }}
+        </button>
+      </div>
+    </template>
+
+    <MobileStockSheet
+      v-model="showSheet"
+      :stock-code="stockCode"
+      :quote="quote"
+      :info="stockInfo"
+      :chanlun-result="store.chanlunResult"
+      :ai-signal="store.aiSignal"
+      :loading-a-i="store.loadingAI"
+    />
+  </div>
+</template>
+
+<script setup lang="ts">
+import { ref, computed, onMounted, watch } from 'vue'
+import { useRoute } from 'vue-router'
+import { useChanlunStore, type LevelOption } from '@/stores/chanlun'
+import { stockApi, type Quote, type StockInfoFields } from '@/api/stock'
+import MobileKLineChart from '../components/MobileKLineChart.vue'
+import MobileStockSheet from '../components/MobileStockSheet.vue'
+import MobileIndicatorSelector from '../components/MobileIndicatorSelector.vue'
+
+const route = useRoute()
+const store = useChanlunStore()
+
+const zoomStart = ref(0)
+const zoomEnd = ref(100)
+const showSheet = ref(false)
+const signalsExpanded = ref(false)
+const quote = ref<Quote | null>(null)
+const stockInfo = ref<StockInfoFields | null>(null)
+const isWatching = ref(false)
+
+function onZoomChange(s: number, e: number) {
+  zoomStart.value = s
+  zoomEnd.value = e
+}
+
+const stockCode = computed(() => route.params.code as string)
+const currentLevel = computed(() => store.currentLevel)
+const loadingAny = computed(() => store.loadingKline || store.loadingChanlun || store.loadingAI)
+const error = computed(() =>
+  store.errorKline || store.errorChanlun || store.errorAI
+)
+
+const levels = [
+  { value: '1min' as LevelOption, label: '1分' },
+  { value: '5min' as LevelOption, label: '5分' },
+  { value: '15min' as LevelOption, label: '15分' },
+  { value: '30min' as LevelOption, label: '30分' },
+  { value: '60min' as LevelOption, label: '60分' },
+  { value: 'daily' as LevelOption, label: '日线' },
+  { value: 'weekly' as LevelOption, label: '周线' },
+  { value: 'monthly' as LevelOption, label: '月线' },
+]
+
+function _num(v: unknown): number | null {
+  if (v == null || v === '') return null
+  const n = Number(v)
+  return Number.isFinite(n) ? n : null
+}
+
+const headerQuote = computed((): Quote | null => {
+  const q = quote.value
+  const s = stockInfo.value as Record<string, unknown> | null
+  if (!q && !s) return null
+  const price = _num(q?.price) ?? _num(s?.['现价'])
+  if (price == null) return null
+  const name = (q?.name != null && String(q.name).trim() !== '' ? String(q.name) : '') ||
+    (s?.['名称'] != null ? String(s['名称']).trim() : '') || ''
+  const code = String(q?.code ?? s?.['代码'] ?? stockCode.value)
+  return {
+    code,
+    name,
+    price,
+    change_pct: _num(q?.change_pct) ?? _num(s?.['涨跌幅']) ?? 0,
+    volume: _num(q?.volume) ?? _num(s?.['成交量']) ?? 0,
+    amount: _num(q?.amount) ?? _num(s?.['成交额']) ?? 0,
+    high: _num(q?.high) ?? _num(s?.['最高']) ?? 0,
+    low: _num(q?.low) ?? _num(s?.['最低']) ?? 0,
+    open: _num(q?.open) ?? _num(s?.['今开']) ?? 0,
+    prev_close: _num(q?.prev_close) ?? _num(s?.['昨收']) ?? 0,
+  }
+})
+
+const changeClass = computed(() => {
+  const hq = headerQuote.value
+  if (!hq) return ''
+  return hq.change_pct > 0 ? 'price-up' : hq.change_pct < 0 ? 'price-down' : 'price-flat'
+})
+
+const changeText = computed(() => {
+  const hq = headerQuote.value
+  if (!hq) return ''
+  const pct = hq.change_pct
+  return `${pct > 0 ? '+' : ''}${pct?.toFixed(2) || 0}%`
+})
+
+function signalBadgeClass(type: string) {
+  if (/买/i.test(type)) return 'badge-buy'
+  if (/卖/i.test(type)) return 'badge-sell'
+  return 'badge-wait'
+}
+
+async function loadData() {
+  const code = stockCode.value
+  if (!code) return
+  await store.loadAll(code, currentLevel.value)
+  const settled = await Promise.allSettled([
+    stockApi.quote(code),
+    stockApi.info(code),
+  ])
+  if (settled[0].status === 'fulfilled') quote.value = settled[0].value.data as Quote
+  if (settled[1].status === 'fulfilled') {
+    const inf = settled[1].value.data.info
+    stockInfo.value = inf && Object.keys(inf).length ? inf : null
+  }
+}
+
+async function changeLevel(level: LevelOption) {
+  await store.loadAll(stockCode.value, level)
+}
+
+async function toggleWatch() {
+  if (isWatching.value) {
+    await stockApi.removeWatch(stockCode.value)
+    isWatching.value = false
+  } else {
+    await stockApi.addWatch(stockCode.value)
+    isWatching.value = true
+  }
+}
+
+onMounted(loadData)
+watch(() => route.params.code, () => { signalsExpanded.value = false; loadData() })
+</script>
+
+<style scoped>
+.stock-view {
+  padding: 12px 16px 24px;
+  display: flex;
+  flex-direction: column;
+  gap: 12px;
+}
+
+.stock-header {
+  display: flex;
+  align-items: center;
+  justify-content: space-between;
+  padding: 14px 16px;
+}
+.sh-left { display: flex; flex-direction: column; gap: 3px; }
+.sh-name {
+  font-size: 1.1rem;
+  font-weight: 700;
+  color: var(--text-primary);
+}
+.sh-code {
+  font-size: 0.75rem;
+  color: var(--text-muted);
+}
+.sh-right { display: flex; flex-direction: column; align-items: flex-end; gap: 3px; }
+.sh-price {
+  font-size: 1.6rem;
+  font-weight: 700;
+  line-height: 1;
+}
+.sh-change {
+  font-size: 0.9rem;
+  font-weight: 600;
+}
+
+.chart-section {
+  border-radius: 10px;
+  overflow: hidden;
+}
+
+.chart-controls {
+  display: flex;
+  align-items: center;
+  gap: 8px;
+}
+
+.level-tabs {
+  display: flex;
+  flex-wrap: wrap;
+  gap: 4px;
+  flex: 1;
+  background: var(--bg-card);
+  border: 1px solid var(--border);
+  border-radius: 8px;
+  padding: 4px;
+}
+
+.level-tab {
+  padding: 6px 10px;
+  border: none;
+  background: transparent;
+  color: var(--text-secondary);
+  font-family: var(--font-mono);
+  font-size: 0.72rem;
+  font-weight: 500;
+  cursor: pointer;
+  border-radius: 6px;
+  transition: background 0.15s, color 0.15s;
+  min-height: 32px;
+}
+.level-tab.active {
+  background: linear-gradient(135deg, rgba(56, 189, 248, 0.2) 0%, rgba(52, 211, 153, 0.12) 100%);
+  color: var(--accent-cyan);
+  font-weight: 600;
+}
+
+.btn-sm {
+  padding: 8px 12px;
+  min-height: 36px;
+  font-size: 0.8rem;
+}
+
+.signals-preview {
+  background: var(--bg-card);
+  border: 1px solid var(--border);
+  border-radius: 10px;
+  padding: 12px 14px;
+  display: flex;
+  flex-direction: column;
+  gap: 10px;
+}
+.sp-head {
+  display: flex;
+  align-items: center;
+  gap: 8px;
+  flex-wrap: wrap;
+}
+
+.expand-btn {
+  display: inline-flex;
+  align-items: center;
+  gap: 4px;
+  background: none;
+  border: none;
+  color: var(--accent-blue);
+  font-size: 0.72rem;
+  font-weight: 600;
+  cursor: pointer;
+  padding: 2px 6px;
+  border-radius: 4px;
+  transition: background 0.15s;
+  margin-left: auto;
+}
+.expand-btn:active { background: var(--bg-hover); }
+.expand-btn svg { transition: transform 0.2s; }
+.sp-title {
+  font-size: 0.8rem;
+  font-weight: 700;
+  color: var(--text-secondary);
+}
+.sp-count {
+  font-size: 0.7rem;
+  color: var(--text-muted);
+}
+.sp-list { display: flex; flex-direction: column; gap: 8px; }
+.sp-item {
+  display: flex;
+  align-items: flex-start;
+  gap: 8px;
+  padding: 8px 10px;
+  background: var(--bg-secondary);
+  border-radius: 8px;
+  border: 1px solid var(--border);
+}
+.sp-badge {
+  flex-shrink: 0;
+  font-size: 0.72rem;
+  padding: 2px 8px;
+}
+.sp-desc {
+  font-size: 0.78rem;
+  color: var(--text-primary);
+  line-height: 1.4;
+  display: -webkit-box;
+  -webkit-line-clamp: 2;
+  -webkit-box-orient: vertical;
+  overflow: hidden;
+}
+
+.action-bar {
+  display: flex;
+  gap: 8px;
+  padding-bottom: 8px;
+}
+.action-bar .btn {
+  flex: 1;
+}
+
+.page-loading {
+  display: flex;
+  flex-direction: column;
+  align-items: center;
+  justify-content: center;
+  gap: 16px;
+  height: 50vh;
+  color: var(--text-secondary);
+  font-size: 0.9rem;
+}
+.spinner {
+  width: 28px;
+  height: 28px;
+  border: 2px solid var(--border);
+  border-top-color: var(--accent-blue);
+  border-radius: 50%;
+  animation: spin 0.8s linear infinite;
+}
+@keyframes spin { to { transform: rotate(360deg); } }
+
+.page-error {
+  text-align: center;
+  padding: 60px 24px;
+  color: var(--accent-red);
+  display: flex;
+  flex-direction: column;
+  align-items: center;
+  gap: 16px;
+}
+</style>
