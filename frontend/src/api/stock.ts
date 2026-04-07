@@ -129,6 +129,7 @@ export interface Quote {
   open: number
   prev_close: number
   amount: number
+  added_at?: string  // 自选添加时间（ISO 字符串）
 }
 
 /** 腾讯行情接口解析的基本面/行情字段（与后端 get_stock_info 一致） */

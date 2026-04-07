@@ -531,24 +531,25 @@ def ai_signal(
 _WATCHLIST_FILE = Path(__file__).parent / "watchlist.json"
 
 
-def _load_watchlist() -> list[str]:
+def _load_watchlist() -> dict[str, str]:
+    """返回 {股票代码: 添加时间ISO字符串}"""
     try:
         if _WATCHLIST_FILE.exists():
-            codes = json.loads(_WATCHLIST_FILE.read_text(encoding="utf-8"))
-            return [str(c).zfill(6) for c in codes if str(c).strip()]
+            data = json.loads(_WATCHLIST_FILE.read_text(encoding="utf-8"))
+            return {str(k).zfill(6): str(v) for k, v in data.items() if str(k).strip()}
     except Exception as e:
         print(f"自选股加载失败: {e}")
-    return []
+    return {}
 
 
-def _save_watchlist(codes: list[str]):
+def _save_watchlist(data: dict[str, str]):
     try:
-        _WATCHLIST_FILE.write_text(json.dumps(codes, ensure_ascii=False, indent=2), encoding="utf-8")
+        _WATCHLIST_FILE.write_text(json.dumps(data, ensure_ascii=False, indent=2), encoding="utf-8")
     except Exception as e:
         print(f"自选股保存失败: {e}")
 
 
-_watchlist: list[str] = _load_watchlist()
+_watchlist: dict[str, str] = _load_watchlist()
 
 
 @app.get("/api/watchlist", tags=["自选"])
@@ -557,7 +558,8 @@ def get_watchlist():
     if not _watchlist:
         return {"stocks": []}
 
-    df = get_realtime_quote(_watchlist)
+    codes = list(_watchlist.keys())
+    df = get_realtime_quote(codes)
     if df.empty:
         return {"stocks": [], "total": 0}
 
@@ -568,6 +570,7 @@ def get_watchlist():
                 "name": str(row.get("名称", "")),
                 "price": float(row.get("最新价", 0) or 0),
                 "change_pct": float(row.get("涨跌幅", 0) or 0),
+                "added_at": _watchlist.get(str(row.get("代码", "")), ""),
             }
             for _, row in df.iterrows()
         ],
@@ -580,9 +583,9 @@ def add_watchlist(code: str):
     """添加自选股"""
     sym, _ = normalize_stock_code(code)
     if sym not in _watchlist:
-        _watchlist.append(sym)
+        _watchlist[sym] = datetime.now().isoformat()
         _save_watchlist(_watchlist)
-    return {"code": sym, "added": True, "total": len(_watchlist)}
+    return {"code": sym, "added": True, "added_at": _watchlist[sym], "total": len(_watchlist)}
 
 
 @app.delete("/api/watchlist/{code}", tags=["自选"])
@@ -590,7 +593,7 @@ def remove_watchlist(code: str):
     """删除自选股"""
     sym, _ = normalize_stock_code(code)
     if sym in _watchlist:
-        _watchlist.remove(sym)
+        del _watchlist[sym]
         _save_watchlist(_watchlist)
     return {"code": sym, "removed": True, "total": len(_watchlist)}
 

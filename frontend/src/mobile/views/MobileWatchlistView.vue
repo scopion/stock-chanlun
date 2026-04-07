@@ -32,7 +32,10 @@
       >
         <div class="sr-left">
           <div class="sr-name">{{ s.name || s.code }}</div>
-          <div class="sr-code mono">{{ s.code }}</div>
+          <div class="sr-code-row">
+            <span class="sr-code mono">{{ s.code }}</span>
+            <span v-if="s.added_at" class="sr-added">{{ fmtAdded(s.added_at) }}</span>
+          </div>
         </div>
         <div class="sr-center">
           <div class="sr-price mono">{{ s.price > 0 ? s.price.toFixed(2) : '—' }}</div>
@@ -71,6 +74,18 @@ function fmtVol(v?: number) {
   if (v >= 1e8) return (v / 1e8).toFixed(2) + '亿'
   if (v >= 1e4) return (v / 1e4).toFixed(2) + '万'
   return String(v)
+}
+
+function fmtAdded(iso: string): string {
+  try {
+    const d = new Date(iso)
+    if (isNaN(d.getTime())) return ''
+    const m = String(d.getMonth() + 1).padStart(2, '0')
+    const day = String(d.getDate()).padStart(2, '0')
+    return `${m}-${day}`
+  } catch {
+    return ''
+  }
 }
 
 function go(path: string) {
@@ -192,6 +207,18 @@ onMounted(() => {
 .sr-code {
   font-size: 0.7rem;
   color: var(--text-muted);
+}
+
+.sr-code-row {
+  display: flex;
+  align-items: center;
+  gap: 8px;
+}
+
+.sr-added {
+  font-size: 0.65rem;
+  color: var(--text-muted);
+  opacity: 0.7;
 }
 
 .sr-center {

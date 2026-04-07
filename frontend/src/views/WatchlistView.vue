@@ -50,6 +50,7 @@
           <span>名称</span>
           <span>现价</span>
           <span>涨跌幅</span>
+          <span>自选时间</span>
           <span></span>
         </div>
         <div
@@ -64,6 +65,7 @@
           <span class="mono" :class="stock.change_pct > 0 ? 'price-up' : 'price-down'">
             {{ stock.change_pct > 0 ? '+' : '' }}{{ stock.change_pct?.toFixed(2) || 0 }}%
           </span>
+          <span class="added-time">{{ formatAddedTime(stock.added_at) }}</span>
           <button class="remove-btn" @click.stop="removeStock(stock.code)">
             <svg width="14" height="14" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2">
               <path d="M18 6L6 18M6 6l12 12"/>
@@ -88,6 +90,21 @@ function formatTime(d: Date): string {
   const h = String(d.getHours()).padStart(2, '0')
   const m = String(d.getMinutes()).padStart(2, '0')
   return `${h}:${m}`
+}
+
+function formatAddedTime(iso: string | undefined): string {
+  if (!iso) return '—'
+  try {
+    const d = new Date(iso)
+    if (isNaN(d.getTime())) return '—'
+    const m = String(d.getMonth() + 1).padStart(2, '0')
+    const day = String(d.getDate()).padStart(2, '0')
+    const h = String(d.getHours()).padStart(2, '0')
+    const min = String(d.getMinutes()).padStart(2, '0')
+    return `${m}-${day} ${h}:${min}`
+  } catch {
+    return '—'
+  }
 }
 
 function goToStock(code: string) { router.push(`/stock/${code}`) }
@@ -150,7 +167,7 @@ onMounted(() => store.fetchWatchlist())
 
 .table-header, .table-row {
   display: grid;
-  grid-template-columns: 100px 1fr 100px 120px 40px;
+  grid-template-columns: 100px 1fr 100px 120px 130px 40px;
   align-items: center;
   padding: 12px 16px;
   border-radius: 8px;
@@ -182,4 +199,9 @@ onMounted(() => store.fetchWatchlist())
 .remove-btn:hover { color: var(--accent-red); background: rgba(248,81,73,0.1); }
 
 .name { font-weight: 500; }
+
+.added-time {
+  font-size: 0.78rem;
+  color: var(--text-muted);
+}
 </style>
