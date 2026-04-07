@@ -166,11 +166,12 @@
           :ai-signal="store.aiSignal"
           :support-resistance="store.chanlunResult?.supportResistance || []"
           :indicators="store.indicators"
+          @zoom-change="onZoomChange"
         />
-        <VolumeChart v-if="store.indicators.volume" :klines="store.klines" class="sub-chart" />
-        <MACDChart v-if="store.indicators.macd" :klines="store.klines" class="sub-chart" />
-        <RSIChart v-if="store.indicators.rsi" :klines="store.klines" class="sub-chart" />
-        <SKDJChart v-if="store.indicators.skdj" :klines="store.klines" class="sub-chart" />
+        <VolumeChart v-if="store.indicators.volume" :klines="store.klines" :zoom-start="zoomStart" :zoom-end="zoomEnd" class="sub-chart" />
+        <MACDChart v-if="store.indicators.macd" :klines="store.klines" :zoom-start="zoomStart" :zoom-end="zoomEnd" class="sub-chart" />
+        <RSIChart v-if="store.indicators.rsi" :klines="store.klines" :zoom-start="zoomStart" :zoom-end="zoomEnd" class="sub-chart" />
+        <SKDJChart v-if="store.indicators.skdj" :klines="store.klines" :zoom-start="zoomStart" :zoom-end="zoomEnd" class="sub-chart" />
       </div>
 
       <!-- 盘口 / 板块 / 个股新闻（K 线与策略之间的竖栏） -->
@@ -274,6 +275,14 @@ import IndicatorSelector from '../components/IndicatorSelector.vue'
 const route = useRoute()
 const store = useChanlunStore()
 const klineChartRef = ref<InstanceType<typeof KLineChart> | null>(null)
+
+const zoomStart = ref(70)
+const zoomEnd = ref(100)
+
+function onZoomChange(start: number, end: number) {
+  zoomStart.value = start
+  zoomEnd.value = end
+}
 
 const stockCode = computed(() => route.params.code as string)
 const currentLevel = computed(() => store.currentLevel)

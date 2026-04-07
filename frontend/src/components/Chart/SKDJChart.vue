@@ -8,10 +8,11 @@ import * as echarts from 'echarts'
 import type { KLine } from '../../api/stock'
 import { calcSKDJ } from '../../utils/stockIndicators'
 
-const props = defineProps<{ klines: KLine[] }>()
+const props = defineProps<{ klines: KLine[]; zoomStart?: number; zoomEnd?: number }>()
 
 const chartRef = ref<HTMLDivElement | null>(null)
 let chart: echarts.ECharts | null = null
+const zoomId = `skdj-zoom-${Math.random().toString(36).slice(2)}`
 
 function buildOption() {
   if (props.klines.length < 12) return {}
@@ -20,6 +21,8 @@ function buildOption() {
   const closes = props.klines.map(k => Number(k.close))
   const { sk, sd } = calcSKDJ(highs, lows, closes)
   const dates = props.klines.map(k => k.date.slice(0, 10))
+  const s = props.zoomStart ?? 70
+  const e = props.zoomEnd ?? 100
 
   return {
     animation: false,
@@ -35,6 +38,9 @@ function buildOption() {
       splitLine: { lineStyle: { color: '#21262d', type: 'dashed' } },
       axisLabel: { color: '#7d8590', fontSize: 9 }
     }],
+    dataZoom: [
+      { id: zoomId, type: 'slider', xAxisIndex: 0, start: s, end: e, show: false }
+    ],
     series: [
       {
         name: 'SK',
@@ -79,7 +85,7 @@ onMounted(() => {
 })
 onUnmounted(() => { chart?.dispose() })
 
-watch(() => props.klines, () => {
+watch([() => props.klines, () => props.zoomStart, () => props.zoomEnd], () => {
   if (!chart) return
   chart.setOption(buildOption(), { notMerge: true })
 }, { deep: true })
