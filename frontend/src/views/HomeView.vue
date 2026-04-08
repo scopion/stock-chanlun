@@ -14,8 +14,8 @@
             <input
               v-model="keyword"
               @keydown.enter="search"
-              @focus="showHistory = true"
-              @blur="setTimeout(() => showHistory = false, 150)"
+              @focus="onSearchFocus"
+              @blur="onSearchBlur"
               placeholder="输入股票代码或名称..."
               class="search-input"
             />
@@ -318,8 +318,17 @@ const keyword = ref('')
 const results = ref<{ code: string; name: string }[]>([])
 const searching = ref(false)
 const searchError = ref('')
-const searchHistory = ref<string[]>(JSON.parse(localStorage.getItem('search_history') || '[]'))
+const searchHistory = ref<string[]>(JSON.parse(localStorage.getItem('search_history') ?? 'null') ?? [])
 const showHistory = ref(false)
+const blurTimer = ref<ReturnType<typeof setTimeout> | null>(null)
+
+function onSearchFocus() {
+  showHistory.value = true
+}
+
+function onSearchBlur() {
+  blurTimer.value = setTimeout(() => { showHistory.value = false }, 150)
+}
 
 function saveHistory(q: string) {
   const q2 = q.trim()
