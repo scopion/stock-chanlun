@@ -1,7 +1,8 @@
 import axios from 'axios'
 
 const api = axios.create({
-  baseURL: '/api',
+  // 生产环境使用环境变量中的后端地址，开发环境使用相对路径（Vite 代理）
+  baseURL: import.meta.env.VITE_API_BASE_URL || '/api',
   timeout: 60000,
 })
 
@@ -389,8 +390,9 @@ export const stockApi = {
     sessionId = 'default',
     model = 'deepseek'
   ): AsyncGenerator<string, void, unknown> {
+    const base = import.meta.env.VITE_API_BASE_URL || ''
     const encodedQuestion = encodeURIComponent(question)
-    const url = `/api/ai/diagnosis?code=${encodeURIComponent(code)}&question=${encodedQuestion}&session_id=${encodeURIComponent(sessionId)}&model=${encodeURIComponent(model)}`
+    const url = `${base}/api/ai/diagnosis?code=${encodeURIComponent(code)}&question=${encodedQuestion}&session_id=${encodeURIComponent(sessionId)}&model=${encodeURIComponent(model)}`
 
     const resp = await fetch(url)
     if (!resp.ok) {

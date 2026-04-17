@@ -10,7 +10,7 @@
           <router-link to="/watchlist" class="nav-link">自选股</router-link>
         </div>
         <div class="search-box">
-          <div class="search-wrap" @click="$refs.searchInput?.focus()">
+          <div class="search-wrap" @click="searchInput?.focus()">
             <svg class="search-icon" width="16" height="16" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2">
               <circle cx="11" cy="11" r="8"/><path d="m21 21-4.35-4.35"/>
             </svg>
@@ -336,6 +336,7 @@ const searchError = ref('')
 const searchHistory = ref<string[]>(JSON.parse(localStorage.getItem('search_history') ?? 'null') ?? [])
 const showHistory = ref(false)
 const blurTimer = ref<ReturnType<typeof setTimeout> | null>(null)
+const searchInput = ref<{ focus: () => void } | null>(null)
 
 function onSearchFocus() {
   showHistory.value = true

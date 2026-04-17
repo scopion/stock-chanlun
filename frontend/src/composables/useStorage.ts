@@ -1,7 +1,7 @@
 /**
  * 本地存储 Hook - 支持响应式和 JSON 自动序列化
  */
-import { ref, watch } from 'vue'
+import { ref, watch, type Ref } from 'vue'
 
 export function useStorage<T>(key: string, defaultValue: T): [Ref<T>, (value: T) => void] {
   const stored = localStorage.getItem(key)
