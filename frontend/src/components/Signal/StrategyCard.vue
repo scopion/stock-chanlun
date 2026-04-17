@@ -60,7 +60,9 @@
       <!-- Divergence -->
       <div v-if="signal.divergence" class="divergence-block">
         <div class="divergence-header">
-          <span class="divergence-icon">⚡</span>
+          <svg width="14" height="14" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2">
+            <polygon points="13 2 3 14 12 14 11 22 21 10 12 10 13 2"/>
+          </svg>
           <span>背驰判断</span>
           <span class="divergence-prob mono">{{ (signal.divergence.probability * 100).toFixed(0) }}%</span>
         </div>
@@ -69,7 +71,10 @@
 
       <!-- Resonance -->
       <div v-if="signal.resonance?.共振" class="resonance-block">
-        <span class="resonance-icon">🔗</span>
+        <svg width="14" height="14" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2">
+          <path d="M10 13a5 5 0 0 0 7.54.54l3-3a5 5 0 0 0-7.07-7.07l-1.72 1.71"/>
+          <path d="M14 11a5 5 0 0 0-7.54-.54l-3 3a5 5 0 0 0 7.07 7.07l1.71-1.71"/>
+        </svg>
         <span>多级别共振: {{ signal.resonance.levels?.join(' + ') }}</span>
       </div>
 
@@ -174,7 +179,7 @@ function confColor(c: number) {
   border: 1px solid rgba(88,166,255,0.15);
   border-radius: 8px;
 }
-.divergence-header { display: flex; align-items: center; gap: 6px; font-size: 0.8rem; font-weight: 600; margin-bottom: 4px; }
+.divergence-header { display: flex; align-items: center; gap: 6px; font-size: 0.8rem; font-weight: 600; margin-bottom: 4px; color: var(--accent-blue); }
 .divergence-prob { color: var(--accent-blue); }
 .divergence-desc { font-size: 0.75rem; color: var(--text-secondary); }
 

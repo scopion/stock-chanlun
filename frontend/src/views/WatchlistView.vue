@@ -91,6 +91,7 @@
 import { ref, computed, onMounted } from 'vue'
 import { useRouter } from 'vue-router'
 import { useWatchlistStore } from '../stores/watchlist'
+import toast from '../composables/useToast'
 
 const router = useRouter()
 const store = useWatchlistStore()
@@ -153,12 +154,19 @@ function goToStock(code: string) { router.push(`/stock/${code}`) }
 
 async function addStock() {
   if (!addCode.value.trim()) return
-  await store.addStock(addCode.value.trim().replace(/\D/g, '').padStart(6, '0'))
+  const code = addCode.value.trim().replace(/\D/g, '').padStart(6, '0')
+  if (code.length !== 6) {
+    toast.warning('请输入有效的6位股票代码')
+    return
+  }
+  await store.addStock(code)
   addCode.value = ''
+  toast.success('已添加到自选股')
 }
 
 async function removeStock(code: string) {
   await store.removeStock(code)
+  toast.info('已从自选股移除')
 }
 
 onMounted(() => store.fetchWatchlist())

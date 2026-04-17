@@ -116,6 +116,7 @@
 <script setup lang="ts">
 import { ref, nextTick } from 'vue'
 import { stockApi } from '@/api/stock'
+import toast from '@/composables/useToast'
 
 const props = defineProps<{ stockCode: string }>()
 
@@ -203,6 +204,7 @@ async function sendMessage() {
       streaming: false,
       error: err.message || '诊断失败，请重试',
     }
+    toast.error('AI 诊断请求失败，请重试')
   } finally {
     isLoading.value = false
     await nextTick()

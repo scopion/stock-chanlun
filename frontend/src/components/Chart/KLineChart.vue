@@ -242,15 +242,34 @@ function buildOption() {
         if (idx == null || idx < 0 || idx >= props.klines.length) return ''
         const k = props.klines[idx]
         const d = dates[idx]
-        let html = `<div style="font-weight:600;margin-bottom:6px;border-bottom:1px solid #30363d;padding-bottom:4px">${d}</div>`
+        const change = k.close >= k.open
+        const changeColor = change ? '#3fb950' : '#f85149'
+        const changePct = k.open > 0 ? ((k.close - k.open) / k.open * 100) : 0
+
+        let html = `<div style="font-weight:600;margin-bottom:8px;border-bottom:1px solid #30363d;padding-bottom:6px">${d}</div>`
+
+        // 价格信息
+        html += `<div style="display:grid;grid-template-columns:1fr 1fr;gap:4px 16px">`
         html += `<div>开盘 <b>${fmtPrice(k.open)}</b></div>`
-        html += `<div>收盘 <b>${fmtPrice(k.close)}</b></div>`
-        html += `<div>最高 ${fmtPrice(k.high)}　最低 ${fmtPrice(k.low)}</div>`
-        html += `<div style="margin-top:6px;padding-top:4px;border-top:1px solid #30363d">`
-        html += `<span style="color:#f0b429">■</span> MA5 ${fmtPrice(ma5[idx])}<br/>`
-        html += `<span style="color:#58a6ff">■</span> MA20 ${fmtPrice(ma20[idx])}<br/>`
-        html += `<span style="color:#bc8cff">■</span> MA60 ${fmtPrice(ma60[idx])}`
+        html += `<div style="color:${changeColor}">收盘 <b>${fmtPrice(k.close)}</b></div>`
+        html += `<div>最高 ${fmtPrice(k.high)}</div>`
+        html += `<div>最低 ${fmtPrice(k.low)}</div>`
         html += `</div>`
+
+        // 涨跌幅
+        html += `<div style="margin-top:6px;padding-top:6px;border-top:1px solid #30363d;color:${changeColor}">`
+        html += `涨跌额 ${change ? '+' : ''}${(k.close - k.open).toFixed(2)}　`
+        html += `涨跌幅 ${change ? '+' : ''}${changePct.toFixed(2)}%`
+        html += `</div>`
+
+        // 均线
+        html += `<div style="margin-top:6px;padding-top:6px;border-top:1px solid #30363d">`
+        html += `<div style="margin-bottom:4px;color:#7d8590">均线</div>`
+        html += `<span style="color:#f0b429">●</span> MA5 ${fmtPrice(ma5[idx])}　`
+        html += `<span style="color:#58a6ff">●</span> MA20 ${fmtPrice(ma20[idx])}　`
+        html += `<span style="color:#bc8cff">●</span> MA60 ${fmtPrice(ma60[idx])}`
+        html += `</div>`
+
         return html
       }
     }
@@ -490,17 +509,13 @@ function applyChanlunGraphic() {
     }
   }
 
-  // ── MACD + SKDJ 双金叉（算法与副图 utils/stockIndicators 同源；合并段取最左一根防误标死叉日） ──
+  // ── MACD + SKDJ 双金叉（算法与副图 utils/stockIndicators 同源） ──
   if (props.klines.length >= 30) {
     const RESONANCE_WINDOW = 3
     const { indices: markIdxs } = computeDualMacdSkdjMarkerIndices(props.klines, RESONANCE_WINDOW)
     for (const idx of markIdxs) {
       const pt = pixelAtIdx(idx, props.klines[idx].close)
-      if (!pt) {
-        console.warn(`[MACD+SKDJ] pixelAtIdx 返回 null，idx=${idx}`)
-        continue
-      }
-      console.log(`[MACD+SKDJ 标记] idx=${idx} 日期=${props.klines[idx].date.slice(0,10)} 像素=(${pt[0].toFixed(1)},${pt[1].toFixed(1)}) 收盘=${props.klines[idx].close}`)
+      if (!pt) continue
       children.push({
         type: 'circle',
         shape: { cx: pt[0], cy: pt[1], r: 7 },

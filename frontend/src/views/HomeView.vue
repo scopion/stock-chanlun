@@ -10,16 +10,18 @@
           <router-link to="/watchlist" class="nav-link">自选股</router-link>
         </div>
         <div class="search-box">
-          <div class="search-wrap">
+          <div class="search-wrap" @click="$refs.searchInput?.focus()">
             <svg class="search-icon" width="16" height="16" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2">
               <circle cx="11" cy="11" r="8"/><path d="m21 21-4.35-4.35"/>
             </svg>
             <input
+              ref="searchInput"
               v-model="keyword"
               @keydown.enter="search"
+              @keydown.escape="keyword = ''; results = []"
               @focus="onSearchFocus"
               @blur="onSearchBlur"
-              placeholder="输入股票代码或名称..."
+              placeholder="输入股票代码或名称... (按 / 快速聚焦)"
               class="search-input"
             />
             <button v-if="keyword" class="search-clear" @click="keyword = ''; results = []" aria-label="清除">
@@ -321,9 +323,10 @@
 </template>
 
 <script setup lang="ts">
-import { ref, onMounted, computed } from 'vue'
+import { ref, onMounted, onUnmounted, computed } from 'vue'
 import { useRouter } from 'vue-router'
 import { stockApi, type HotStock, type MarketOverview, type NewsItem } from '../api/stock'
+import toast from '../composables/useToast'
 
 const router = useRouter()
 const keyword = ref('')
@@ -365,8 +368,15 @@ async function search() {
   try {
     const res = await stockApi.search(keyword.value)
     results.value = res.data.stocks ?? []
-  } catch (e: any) { searchError.value = e.message }
-  finally { searching.value = false }
+    if (results.value.length === 0) {
+      toast.info('未找到相关股票，请尝试其他关键词')
+    }
+  } catch (e: any) {
+    searchError.value = e.message
+    toast.error('搜索失败，请重试')
+  } finally {
+    searching.value = false
+  }
 }
 
 function selectHistory(q: string) {
@@ -472,7 +482,25 @@ async function fetchNews() {
 
 onMounted(async () => {
   await Promise.allSettled([fetchHot(), fetchMarket(), fetchNews()])
+  // 全局快捷键：按 / 聚焦搜索框
+  window.addEventListener('keydown', handleGlobalKey)
 })
+
+onUnmounted(() => {
+  window.removeEventListener('keydown', handleGlobalKey)
+})
+
+function handleGlobalKey(e: KeyboardEvent) {
+  // 忽略输入框中按 / 的情况
+  if ((e.target as HTMLElement).tagName === 'INPUT' || (e.target as HTMLElement).tagName === 'TEXTAREA') {
+    return
+  }
+  if (e.key === '/') {
+    e.preventDefault()
+    const input = document.querySelector('.search-input') as HTMLInputElement
+    input?.focus()
+  }
+}
 </script>
 
 <style scoped>
@@ -917,7 +945,8 @@ onMounted(async () => {
   cursor: pointer;
   transition: all 0.15s;
 }
-.stock-card:hover { background: var(--bg-hover); border-color: var(--accent-blue); }
+.stock-card:hover { background: var(--bg-hover); border-color: var(--accent-blue); transform: translateX(4px); }
+.stock-card:active { transform: translateX(2px) scale(0.99); }
 .stock-info { display: flex; flex-direction: column; gap: 4px; }
 .stock-code { font-size: 0.9rem; color: var(--accent-blue); }
 .stock-name { font-size: 1.1rem; font-weight: 600; }

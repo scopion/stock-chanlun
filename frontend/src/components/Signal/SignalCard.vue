@@ -8,8 +8,26 @@
       </div>
     </div>
 
+    <!-- 信号统计摘要 -->
+    <div v-if="signals.length > 0" class="signal-summary">
+      <div class="summary-item buy-summary">
+        <span class="summary-count">{{ buyCount }}</span>
+        <span class="summary-label">买入信号</span>
+      </div>
+      <div class="summary-divider" />
+      <div class="summary-item sell-summary">
+        <span class="summary-count">{{ sellCount }}</span>
+        <span class="summary-label">卖出信号</span>
+      </div>
+    </div>
+
     <div v-if="signals.length === 0" class="empty-signals">
+      <svg class="empty-icon" width="32" height="32" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.5">
+        <rect x="3" y="3" width="18" height="18" rx="2"/>
+        <path d="M3 9h18M9 21V9"/>
+      </svg>
       <span>暂无买卖点</span>
+      <p class="empty-hint">当前级别尚未形成有效背驰或买卖点</p>
     </div>
 
     <div v-else class="signal-list">
@@ -77,6 +95,16 @@ const visibleSignals = computed(() =>
   sortedByDateDesc.value.slice(0, visibleCount.value)
 )
 
+/** 买入信号数量 */
+const buyCount = computed(() =>
+  props.signals.filter(s => s.type.includes('买')).length
+)
+
+/** 卖出信号数量 */
+const sellCount = computed(() =>
+  props.signals.filter(s => s.type.includes('卖')).length
+)
+
 function sigClass(type: string) {
   if (type.includes('买')) return 'sig-buy'
   if (type.includes('卖')) return 'sig-sell'
@@ -116,11 +144,70 @@ function formatDate(d: string) {
   line-height: 1;
 }
 
+/* 信号统计摘要 */
+.signal-summary {
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  gap: 16px;
+  padding: 10px 12px;
+  background: var(--bg-secondary);
+  border-radius: 8px;
+  margin-bottom: 10px;
+}
+
+.summary-item {
+  display: flex;
+  flex-direction: column;
+  align-items: center;
+  gap: 2px;
+}
+
+.summary-count {
+  font-size: 1.2rem;
+  font-weight: 800;
+  line-height: 1;
+}
+
+.buy-summary .summary-count { color: var(--accent-green); }
+.sell-summary .summary-count { color: var(--accent-red); }
+
+.summary-label {
+  font-size: 0.65rem;
+  color: var(--text-muted);
+  text-transform: uppercase;
+  letter-spacing: 0.05em;
+}
+
+.summary-divider {
+  width: 1px;
+  height: 28px;
+  background: var(--border);
+}
+
+/* 空状态 */
 .empty-signals {
   text-align: center;
-  padding: 20px;
+  padding: 24px 16px;
   color: var(--text-muted);
+}
+
+.empty-icon {
+  margin-bottom: 8px;
+  opacity: 0.4;
+  color: var(--text-muted);
+}
+
+.empty-signals > span {
   font-size: 0.85rem;
+  display: block;
+  margin-bottom: 4px;
+}
+
+.empty-hint {
+  font-size: 0.72rem;
+  color: var(--text-secondary);
+  margin: 0;
 }
 
 .signal-list { display: flex; flex-direction: column; gap: 8px; }

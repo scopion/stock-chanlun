@@ -1,4 +1,5 @@
 <template>
+  <PullRefresh :refreshing="refreshing" @refresh="handleRefresh">
   <div class="sector-view">
     <!-- 头部 -->
     <div class="page-head">
@@ -31,7 +32,7 @@
 
     <!-- 成分股列表 -->
     <div v-else class="stock-list">
-      <button
+      <div
         v-for="s in stocks"
         :key="s.code"
         class="stock-row"
@@ -62,9 +63,10 @@
             <path d="M20.84 4.61a5.5 5.5 0 0 0-7.78 0L12 5.67l-1.06-1.06a5.5 5.5 0 0 0-7.78 7.78l1.06 1.06L12 21.23l7.78-7.78 1.06-1.06a5.5 5.5 0 0 0 0-7.78z"/>
           </svg>
         </button>
-      </button>
+      </div>
     </div>
   </div>
+  </PullRefresh>
 </template>
 
 <script setup lang="ts">
@@ -72,6 +74,8 @@ import { ref, computed, onMounted } from 'vue'
 import { useRoute, useRouter } from 'vue-router'
 import { stockApi, type SectorStock } from '@/api/stock'
 import { useWatchlistStore } from '@/stores/watchlist'
+import toast from '@/composables/useToast'
+import PullRefresh from '@/mobile/components/PullRefresh.vue'
 
 const route = useRoute()
 const router = useRouter()
@@ -81,15 +85,21 @@ const sectorName = computed(() => String(route.params.name || ''))
 const stocks = ref<SectorStock[]>([])
 const total = ref(0)
 const boardType = ref<'industry' | 'concept' | null>(null)
-const loading = ref(true)
+const loading = ref(false)
+const refreshing = ref(false)
 const error = ref('')
 
 const watchedCodes = computed(() => new Set(wlStore.stocks.map(s => s.code)))
 function isWatched(code: string) { return watchedCodes.value.has(code) }
 
 async function toggleWatch(code: string) {
-  if (isWatched(code)) await wlStore.removeStock(code)
-  else await wlStore.addStock(code)
+  if (isWatched(code)) {
+    await wlStore.removeStock(code)
+    toast.info('已从自选股移除')
+  } else {
+    await wlStore.addStock(code)
+    toast.success('已添加到自选股')
+  }
 }
 
 function rankClass(rank: number): string {
@@ -114,6 +124,12 @@ async function fetchData() {
   } finally {
     loading.value = false
   }
+}
+
+async function handleRefresh() {
+  refreshing.value = true
+  await fetchData()
+  refreshing.value = false
 }
 
 onMounted(() => {

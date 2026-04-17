@@ -49,8 +49,20 @@
     </div>
 
     <div v-else-if="error" class="error-page">
-      <p>{{ error }}</p>
-      <button class="btn btn-primary" @click="loadData">重试</button>
+      <div class="error-icon">
+        <svg width="48" height="48" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.5">
+          <circle cx="12" cy="12" r="10"/>
+          <line x1="12" y1="8" x2="12" y2="12"/>
+          <line x1="12" y1="16" x2="12.01" y2="16"/>
+        </svg>
+      </div>
+      <p class="error-message">{{ error }}</p>
+      <button class="btn btn-primary" @click="loadData">
+        <svg width="16" height="16" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2">
+          <polyline points="23 4 23 10 17 10"/><path d="M20.49 15a9 9 0 1 1-2.12-9.36L23 10"/>
+        </svg>
+        重试（R键）
+      </button>
     </div>
 
     <div v-else class="main-grid">
@@ -97,7 +109,7 @@
 
         <!-- Level selector -->
         <div class="card">
-          <div class="card-title">分析级别</div>
+          <div class="card-title">分析级别 <span class="level-hint">快捷键: 1/5/D/W/M</span></div>
           <div class="level-tabs">
             <button
               v-for="lv in levels"
@@ -309,11 +321,12 @@
 </template>
 
 <script setup lang="ts">
-import { ref, computed, onMounted, watch } from 'vue'
+import { ref, computed, onMounted, watch, onUnmounted } from 'vue'
 import { useRoute } from 'vue-router'
 import { useChanlunStore, type LevelOption } from '../stores/chanlun'
 import { useCommentStore } from '../stores/comment'
 import { stockApi, type StockInfoFields, type StockExtras, type Quote } from '../api/stock'
+import toast from '../composables/useToast'
 import KLineChart from '../components/Chart/KLineChart.vue'
 import VolumeChart from '../components/Chart/VolumeChart.vue'
 import MACDChart from '../components/Chart/MACDChart.vue'
@@ -572,9 +585,11 @@ async function toggleWatch() {
   if (isWatching.value) {
     await stockApi.removeWatch(stockCode.value)
     isWatching.value = false
+    toast.success('已从自选股移除')
   } else {
     await stockApi.addWatch(stockCode.value)
     isWatching.value = true
+    toast.success('已添加到自选股')
   }
 }
 
@@ -591,7 +606,48 @@ function formatVolume(v?: number) {
   return v.toString()
 }
 
-onMounted(loadData)
+// 键盘快捷键
+function handleKeydown(e: KeyboardEvent) {
+  // 忽略输入框中的按键
+  if ((e.target as HTMLElement).tagName === 'INPUT' || (e.target as HTMLElement).tagName === 'TEXTAREA') {
+    return
+  }
+
+  switch (e.key) {
+    case 'r':
+    case 'R':
+      if (!loadingAny.value) loadData()
+      break
+    case '1':
+      changeLevel('1min')
+      break
+    case '5':
+      changeLevel('5min')
+      break
+    case 'd':
+    case 'D':
+      changeLevel('daily')
+      break
+    case 'w':
+    case 'W':
+      changeLevel('weekly')
+      break
+    case 'm':
+    case 'M':
+      changeLevel('monthly')
+      break
+  }
+}
+
+onMounted(() => {
+  loadData()
+  window.addEventListener('keydown', handleKeydown)
+})
+
+onUnmounted(() => {
+  window.removeEventListener('keydown', handleKeydown)
+})
+
 watch(() => route.params.code, loadData)
 </script>
 
@@ -671,9 +727,27 @@ watch(() => route.params.code, loadData)
 .error-page {
   text-align: center;
   padding: 80px 24px;
-  color: var(--accent-red);
+  display: flex;
+  flex-direction: column;
+  align-items: center;
+  gap: 16px;
 }
-.error-page .btn { margin-top: 16px; }
+.error-icon {
+  color: var(--accent-red);
+  opacity: 0.6;
+}
+.error-message {
+  color: var(--text-secondary);
+  font-size: 0.95rem;
+  margin: 0;
+  max-width: 320px;
+}
+.error-page .btn {
+  margin-top: 8px;
+  display: inline-flex;
+  align-items: center;
+  gap: 6px;
+}
 
 .main-grid {
   display: grid;
@@ -682,8 +756,7 @@ watch(() => route.params.code, loadData)
   padding: 16px 24px;
   max-width: 1760px;
   margin: 0 auto;
-  height: calc(100vh - 56px);
-  overflow: hidden;
+  align-items: start;
 }
 
 .sidebar, .chart-rail { display: flex; flex-direction: column; gap: 12px; }

@@ -8,7 +8,7 @@
         <input
           v-model="keyword"
           @keydown.enter="doSearch"
-          placeholder="输入股票代码或名称"
+          placeholder="输入股票代码或名称... (按 / 快速搜索)"
           class="search-input"
           autocomplete="off"
           autocorrect="off"
@@ -69,7 +69,7 @@
 </template>
 
 <script setup lang="ts">
-import { ref } from 'vue'
+import { ref, onMounted, onUnmounted } from 'vue'
 import { stockApi } from '@/api/stock'
 
 const emit = defineEmits<{ search: [code: string] }>()
@@ -134,6 +134,26 @@ function selectHistory(q: string) {
   showHistory.value = false
   doSearch()
 }
+
+// 全局快捷键：按 / 聚焦搜索框
+function handleGlobalKey(e: KeyboardEvent) {
+  if ((e.target as HTMLElement).tagName === 'INPUT' || (e.target as HTMLElement).tagName === 'TEXTAREA') {
+    return
+  }
+  if (e.key === '/') {
+    e.preventDefault()
+    const input = document.querySelector('.search-input') as HTMLInputElement
+    input?.focus()
+  }
+}
+
+onMounted(() => {
+  window.addEventListener('keydown', handleGlobalKey)
+})
+
+onUnmounted(() => {
+  window.removeEventListener('keydown', handleGlobalKey)
+})
 </script>
 
 <style scoped>

@@ -113,6 +113,7 @@ import { ref, computed, onMounted, watch } from 'vue'
 import { useRoute } from 'vue-router'
 import { useChanlunStore, type LevelOption } from '@/stores/chanlun'
 import { stockApi, type Quote, type StockInfoFields } from '@/api/stock'
+import toast from '@/composables/useToast'
 import MobileKLineChart from '../components/MobileKLineChart.vue'
 import MobileStockSheet from '../components/MobileStockSheet.vue'
 import MobileIndicatorSelector from '../components/MobileIndicatorSelector.vue'
@@ -222,9 +223,11 @@ async function toggleWatch() {
   if (isWatching.value) {
     await stockApi.removeWatch(stockCode.value)
     isWatching.value = false
+    toast.info('已从自选股移除')
   } else {
     await stockApi.addWatch(stockCode.value)
     isWatching.value = true
+    toast.success('已添加到自选股')
   }
 }
 

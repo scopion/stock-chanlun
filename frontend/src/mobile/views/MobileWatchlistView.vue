@@ -1,4 +1,5 @@
 <template>
+  <PullRefresh :refreshing="refreshing" @refresh="handleRefresh">
   <div class="watchlist-view">
     <div class="page-head">
       <h2 class="page-title">我的自选</h2>
@@ -65,15 +66,19 @@
       </button>
     </div>
   </div>
+  </PullRefresh>
 </template>
 
 <script setup lang="ts">
-import { onMounted } from 'vue'
+import { ref, onMounted } from 'vue'
 import { useRouter } from 'vue-router'
 import { useWatchlistStore } from '@/stores/watchlist'
+import toast from '@/composables/useToast'
+import PullRefresh from '@/mobile/components/PullRefresh.vue'
 
 const router = useRouter()
 const store = useWatchlistStore()
+const refreshing = ref(false)
 
 function fmtVol(v?: number) {
   if (!v) return '—'
@@ -100,6 +105,13 @@ function go(path: string) {
 
 async function remove(code: string) {
   await store.removeStock(code)
+  toast.info('已从自选股移除')
+}
+
+async function handleRefresh() {
+  refreshing.value = true
+  await store.fetchWatchlist()
+  refreshing.value = false
 }
 
 onMounted(() => {

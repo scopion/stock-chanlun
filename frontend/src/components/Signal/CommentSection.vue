@@ -104,16 +104,6 @@
       </TransitionGroup>
     </div>
 
-    <!-- 成功提示 -->
-    <Transition name="toast">
-      <div v-if="successMsg" class="success-toast">
-        <svg width="16" height="16" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2.5">
-          <polyline points="20 6 9 17 4 12"/>
-        </svg>
-        {{ successMsg }}
-      </div>
-    </Transition>
-
     <!-- 删除确认 -->
     <div v-if="deleteId" class="delete-confirm-overlay" @click.self="deleteId = null">
       <div class="delete-confirm-dialog">
@@ -132,6 +122,7 @@
 import { ref, computed, nextTick } from 'vue'
 import { useCommentStore } from '../../stores/comment'
 import type { Comment } from '../../api/stock'
+import toast from '../../composables/useToast'
 
 const props = defineProps<{ stockCode: string }>()
 
@@ -145,15 +136,6 @@ const storeError = computed(() => store.getError(props.stockCode))
 const editingId = ref<string | null>(null)
 const formContent = ref('')
 const submitting = ref(false)
-const successMsg = ref('')
-
-let successTimer: ReturnType<typeof setTimeout> | null = null
-
-function showSuccess(msg: string) {
-  successMsg.value = msg
-  if (successTimer) clearTimeout(successTimer)
-  successTimer = setTimeout(() => { successMsg.value = '' }, 3000)
-}
 
 async function submit() {
   const content = formContent.value.trim()
@@ -162,10 +144,10 @@ async function submit() {
   try {
     if (editingId.value) {
       await store.updateComment(props.stockCode, editingId.value, content)
-      showSuccess('修改已保存')
+      toast.success('修改已保存')
     } else {
       await store.addComment(props.stockCode, content)
-      showSuccess('笔记发布成功')
+      toast.success('笔记发布成功')
     }
     const prevId = editingId.value
     cancelEdit()
@@ -198,6 +180,7 @@ async function doDelete() {
   if (!deleteId.value) return
   await store.deleteComment(props.stockCode, deleteId.value)
   deleteId.value = null
+  toast.success('笔记已删除')
 }
 
 function formatTime(iso: string): string {
@@ -409,26 +392,6 @@ function formatTime(iso: string): string {
   opacity: 0;
   max-height: 0;
 }
-/* ── Success Toast ── */
-.success-toast {
-  position: fixed;
-  bottom: 80px;
-  left: 50%;
-  transform: translateX(-50%);
-  background: var(--accent-green);
-  color: #fff;
-  padding: 10px 20px;
-  border-radius: 999px;
-  font-size: 0.82rem;
-  font-weight: 600;
-  display: flex;
-  align-items: center;
-  gap: 8px;
-  z-index: 1000;
-  box-shadow: 0 4px 16px rgba(34, 197, 94, 0.4);
-  white-space: nowrap;
-}
-
 .toast-enter-active, .toast-leave-active {
   transition: opacity 0.25s ease, transform 0.25s ease;
 }

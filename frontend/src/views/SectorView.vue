@@ -107,6 +107,7 @@ import { ref, computed, onMounted } from 'vue'
 import { useRoute, useRouter } from 'vue-router'
 import { stockApi, type SectorStock } from '@/api/stock'
 import { useWatchlistStore } from '@/stores/watchlist'
+import toast from '@/composables/useToast'
 
 const route = useRoute()
 const router = useRouter()
@@ -126,8 +127,10 @@ function isWatched(code: string) { return watchedCodes.value.has(code) }
 async function toggleWatch(code: string) {
   if (isWatched(code)) {
     await watchlistStore.removeStock(code)
+    toast.info('已从自选股移除')
   } else {
     await watchlistStore.addStock(code)
+    toast.success('已添加到自选股')
   }
 }
 
