@@ -1,7 +1,13 @@
 <template>
   <div class="kline-wrap">
     <!-- 主图 + 副图 -->
-    <div ref="chartRef" class="kline-chart" />
+    <div
+      ref="chartRef"
+      class="kline-chart"
+      @touchstart="onTouchStart"
+      @touchmove="onTouchMove"
+      @touchend="onTouchEnd"
+    />
 
     <!-- 底部状态栏 -->
     <div v-if="barInfoText" class="bar-info">{{ barInfoText }}</div>
@@ -19,6 +25,9 @@ import * as echarts from 'echarts'
 import type { KLine, Bi, XiangSegment, Zhongshu, Signal, AISignal, SupportResistance } from '@/api/stock'
 import type { IndicatorConfig } from '@/stores/chanlun'
 import { calcMACD, calcSKDJ, calcRSI, computeDualMacdSkdjMarkerIndices } from '@/utils/stockIndicators'
+
+const LONG_PRESS_DELAY = 400
+const SWIPE_THRESHOLD = 50
 
 const props = defineProps<{
   klines: KLine[]
@@ -41,6 +50,12 @@ const barInfoText = ref('')
 let chart: echarts.ECharts | null = null
 let graphicRaf = 0
 let resizeObserver: ResizeObserver | null = null
+let longPressTimer: ReturnType<typeof setTimeout> | null = null
+let touchStartX = 0
+let touchStartY = 0
+let lastTouchX = 0
+let isScrolling = false
+let touchCount = 0
 
 // ── 指标配置 ────────────────────────────────────────────────────────────────
 function getIndicators(): Required<IndicatorConfig> {
@@ -574,12 +589,66 @@ onMounted(() => {
 onUnmounted(() => {
   cancelAnimationFrame(graphicRaf)
   resizeObserver?.disconnect()
+  if (longPressTimer) clearTimeout(longPressTimer)
   if (chart) {
     chart.dispose()
     chart = null
   }
   window.removeEventListener('resize', onResize)
 })
+
+function onTouchStart(e: TouchEvent) {
+  if (e.touches.length === 1) {
+    touchCount = 1
+    touchStartX = e.touches[0].clientX
+    touchStartY = e.touches[0].clientY
+    lastTouchX = touchStartX
+    isScrolling = false
+    longPressTimer = setTimeout(() => {
+      if (!isScrolling && chart) {
+        chart.dispatchAction({ type: 'showTip' })
+      }
+    }, LONG_PRESS_DELAY)
+  } else if (e.touches.length === 2) {
+    touchCount = 2
+    if (longPressTimer) clearTimeout(longPressTimer)
+  }
+}
+
+function onTouchMove(e: TouchEvent) {
+  if (e.touches.length === 1) {
+    const dx = e.touches[0].clientX - touchStartX
+    const dy = e.touches[0].clientY - touchStartY
+    if (Math.abs(dy) > Math.abs(dx) && Math.abs(dy) > 10) {
+      isScrolling = true
+    }
+    if (!isScrolling && chart) {
+      const step = (touchStartX - e.touches[0].clientX) * 0.05
+      if (Math.abs(step) >= 1) {
+        chart.dispatchAction({ type: 'dataZoom', start: -step, end: step, dataZoomIndex: 0 })
+        touchStartX = e.touches[0].clientX
+      }
+    }
+    lastTouchX = e.touches[0].clientX
+  } else if (e.touches.length === 2) {
+    if (longPressTimer) clearTimeout(longPressTimer)
+  }
+}
+
+function onTouchEnd(e: TouchEvent) {
+  if (longPressTimer) clearTimeout(longPressTimer)
+  longPressTimer = null
+  if (e.changedTouches.length === 1 && !isScrolling) {
+    const dx = e.changedTouches[0].clientX - touchStartX
+    if (Math.abs(dx) < 5 && Math.abs(e.changedTouches[0].clientY - touchStartY) < 5) {
+      if (chart) {
+        chart.dispatchAction({ type: 'hideTip' })
+      }
+    }
+  }
+  touchCount = 0
+  isScrolling = false
+}
 
 watch(
   () => [props.klines, props.bis, props.zhongshus, props.signals, props.xiangs, props.aiSignal, props.supportResistance, props.indicators],

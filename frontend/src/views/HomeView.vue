@@ -55,7 +55,7 @@
     <div v-if="results.length > 0" class="container">
       <div class="results">
         <div
-          v-for="stock in results"
+          v-for="stock in results.slice(0, maxResults)"
           :key="stock.code"
           class="stock-card card"
           @click="goToStock(stock.code)"
@@ -164,7 +164,9 @@
                   >{{ b.change_pct >= 0 ? '+' : '' }}{{ b.change_pct.toFixed(2) }}%</span>
                 </div>
               </div>
-              <p v-else class="hot-boards-empty">暂无板块数据（请检查网络或点击重试）</p>
+              <p v-else class="hot-boards-empty" @click="fetchMarket" role="button" tabindex="0" @keydown.enter="fetchMarket">
+                暂无板块数据（点击重试）
+              </p>
             </div>
 
             <!-- 行业板块横条 -->
@@ -300,6 +302,7 @@
             target="_blank"
             rel="noopener noreferrer"
             class="news-card"
+            title="点击在新标签页打开（将离开本应用）"
           >
             <div class="news-meta">
               <span class="news-source">{{ item.source }}</span>
@@ -339,6 +342,8 @@ const searchHistory = ref<string[]>(JSON.parse(localStorage.getItem('search_hist
 const showHistory = ref(false)
 const blurTimer = ref<ReturnType<typeof setTimeout> | null>(null)
 const searchInput = ref<{ focus: () => void } | null>(null)
+const MAX_RESULTS = 100
+const maxResults = computed(() => Math.min(results.value.length, MAX_RESULTS))
 
 function onSearchFocus() {
   showHistory.value = true
@@ -801,6 +806,14 @@ onUnmounted(() => {
   justify-content: center;
   font-size: 0.78rem;
   color: var(--text-muted);
+  cursor: pointer;
+  border-radius: 8px;
+  transition: background 0.15s, color 0.15s;
+  padding: 12px;
+}
+.hot-boards-empty:hover {
+  background: var(--bg-hover);
+  color: var(--accent-blue);
 }
 
 /* 全部行业板块 */
@@ -920,6 +933,18 @@ onUnmounted(() => {
   transition: border-color 0.15s, background 0.15s;
 }
 .news-card:hover { border-color: var(--accent-blue); background: var(--bg-hover); }
+.news-card::after {
+  content: '';
+  display: inline-block;
+  width: 10px;
+  height: 10px;
+  margin-left: 4px;
+  vertical-align: middle;
+  background-image: url("data:image/svg+xml,%3Csvg xmlns='http://www.w3.org/2000/svg' width='10' height='10' viewBox='0 0 24 24' fill='none' stroke='%2364748b' stroke-width='2'%3E%3Cpath d='M18 13v6a2 2 0 0 1-2 2H5a2 2 0 0 1-2-2V8a2 2 0 0 1 2-2h6'/%3E%3Cpolyline points='15 3 21 3 21 9'/%3E%3Cline x1='10' y1='14' x2='21' y2='3'/%3E%3C/svg%3E");
+  background-repeat: no-repeat;
+  background-position: center;
+  opacity: 0.5;
+}
 .news-meta { display: flex; align-items: center; gap: 8px; margin-bottom: 6px; }
 .news-source { font-size: 0.68rem; font-weight: 700; color: var(--accent-blue); background: rgba(56,189,248,0.12); padding: 2px 6px; border-radius: 4px; }
 .news-time { font-size: 0.68rem; color: var(--text-muted); }
@@ -958,7 +983,15 @@ onUnmounted(() => {
 @keyframes shimmer { 0% { background-position: 200% 0; } 100% { background-position: -200% 0; } }
 
 /* ── 其他 ── */
-.results { display: flex; flex-direction: column; gap: 8px; }
+.results {
+  display: flex;
+  flex-direction: column;
+  gap: 8px;
+  max-height: 480px;
+  overflow-y: auto;
+  scrollbar-width: thin;
+  scrollbar-color: var(--border) transparent;
+}
 .stock-card {
   display: flex;
   align-items: center;
