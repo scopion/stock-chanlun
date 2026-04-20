@@ -6,6 +6,7 @@
       <span class="chevron" :class="{ rotated: isOpen }">▼</span>
     </button>
 
+    <div v-if="isOpen" class="backdrop" @click="toggleOpen" />
     <Transition name="dropdown">
       <div v-if="isOpen" class="dropdown-panel">
         <!-- 主图指标 -->
@@ -150,8 +151,6 @@
         </div>
       </div>
     </Transition>
-
-    <div v-if="isOpen" class="backdrop" @click="toggleOpen"></div>
   </div>
 </template>
 

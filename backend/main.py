@@ -438,6 +438,8 @@ def analyze_chanlun(
                 for lvl in result.support_resistance
             ]
         }
+    except HTTPException:
+        raise
     except Exception as e:
         raise HTTPException(status_code=500, detail=str(e))
 

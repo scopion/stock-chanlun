@@ -82,6 +82,13 @@ const history = ref<string[]>(JSON.parse(localStorage.getItem('m_search_history'
 const showHistory = ref(false)
 let searchTimer: ReturnType<typeof setTimeout> | null = null
 
+function focus() {
+  const input = document.querySelector('.search-input') as HTMLInputElement
+  input?.focus()
+}
+
+defineExpose({ focus })
+
 function onInput() {
   results.value = []
   searched.value = false

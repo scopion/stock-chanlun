@@ -140,6 +140,18 @@
           </div>
         </div>
 
+        <!-- 错误状态 -->
+        <div v-else-if="screenError && results.length === 0" class="empty-state">
+          <svg width="48" height="48" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.5" class="empty-icon">
+            <circle cx="12" cy="12" r="10"/>
+            <line x1="12" y1="8" x2="12" y2="12"/>
+            <line x1="12" y1="16" x2="12.01" y2="16"/>
+          </svg>
+          <p class="empty-title">选股失败</p>
+          <p class="empty-sub">{{ screenError }}</p>
+          <button class="btn btn-primary run-btn" @click="runScreen" style="margin-top:8px">重新选股</button>
+        </div>
+
         <!-- 空状态 -->
         <div v-else-if="!hasSearched" class="empty-state">
           <svg width="48" height="48" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.5" class="empty-icon">
@@ -227,6 +239,7 @@ import { stockApi, type StockScreenResult } from '../api/stock'
 const router = useRouter()
 const loading = ref(false)
 const hasSearched = ref(false)
+const screenError = ref('')
 const results = ref<StockScreenResult[]>([])
 const selectedSignals = ref<string[]>([])
 const progress = ref({ done: 0, total: 0 })
@@ -338,6 +351,7 @@ async function runScreen() {
     }
   } catch (e) {
     console.error('选股失败:', e)
+    screenError.value = e instanceof Error ? e.message : '选股失败，请检查网络后重试'
     results.value = []
   } finally {
     loading.value = false

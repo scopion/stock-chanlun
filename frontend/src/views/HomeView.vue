@@ -328,6 +328,8 @@ import { useRouter } from 'vue-router'
 import { stockApi, type HotStock, type MarketOverview, type NewsItem } from '../api/stock'
 import toast from '../composables/useToast'
 
+const AUTO_REFRESH_INTERVAL = 5 * 60 * 1000 // 5 minutes
+
 const router = useRouter()
 const keyword = ref('')
 const results = ref<{ code: string; name: string }[]>([])
@@ -481,16 +483,6 @@ async function fetchNews() {
   finally { newsLoading.value = false }
 }
 
-onMounted(async () => {
-  await Promise.allSettled([fetchHot(), fetchMarket(), fetchNews()])
-  // 全局快捷键：按 / 聚焦搜索框
-  window.addEventListener('keydown', handleGlobalKey)
-})
-
-onUnmounted(() => {
-  window.removeEventListener('keydown', handleGlobalKey)
-})
-
 function handleGlobalKey(e: KeyboardEvent) {
   // 忽略输入框中按 / 的情况
   if ((e.target as HTMLElement).tagName === 'INPUT' || (e.target as HTMLElement).tagName === 'TEXTAREA') {
@@ -502,6 +494,34 @@ function handleGlobalKey(e: KeyboardEvent) {
     input?.focus()
   }
 }
+
+let refreshTimer: ReturnType<typeof setInterval> | null = null
+
+function startAutoRefresh() {
+  if (refreshTimer) clearInterval(refreshTimer)
+  refreshTimer = setInterval(async () => {
+    await Promise.allSettled([fetchHot(), fetchMarket(), fetchNews()])
+  }, AUTO_REFRESH_INTERVAL)
+}
+
+function stopAutoRefresh() {
+  if (refreshTimer) {
+    clearInterval(refreshTimer)
+    refreshTimer = null
+  }
+}
+
+onMounted(async () => {
+  await Promise.allSettled([fetchHot(), fetchMarket(), fetchNews()])
+  // 全局快捷键：按 / 聚焦搜索框
+  window.addEventListener('keydown', handleGlobalKey)
+  startAutoRefresh()
+})
+
+onUnmounted(() => {
+  window.removeEventListener('keydown', handleGlobalKey)
+  stopAutoRefresh()
+})
 </script>
 
 <style scoped>
