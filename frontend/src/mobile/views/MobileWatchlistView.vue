@@ -104,14 +104,23 @@ function go(path: string) {
 }
 
 async function remove(code: string) {
-  await store.removeStock(code)
+  try {
+    await store.removeStock(code)
+  } catch {
+    // 回滚已在 store 处理
+  }
   toast.info('已从自选股移除')
 }
 
 async function handleRefresh() {
   refreshing.value = true
-  await store.fetchWatchlist()
-  refreshing.value = false
+  try {
+    await store.fetchWatchlist()
+  } catch (e: any) {
+    toast.error(e.message || '刷新失败，请检查网络')
+  } finally {
+    refreshing.value = false
+  }
 }
 
 onMounted(() => {

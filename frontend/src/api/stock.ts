@@ -6,6 +6,41 @@ const api = axios.create({
   timeout: 60000,
 })
 
+// ─── 全局错误拦截 ──────────────────────────────────────────────────────────────
+
+api.interceptors.response.use(
+  response => response,
+  error => {
+    if (axios.isAxiosError(error)) {
+      const status = error.response?.status
+      const data = error.response?.data
+      const msg = data?.message || data?.detail || data?.error || error.message
+
+      let friendly = ''
+      if (status === 401) {
+        friendly = '登录已过期，请重新登录'
+      } else if (status === 403) {
+        friendly = '无权限访问该资源'
+      } else if (status === 404) {
+        friendly = data?.detail || data?.message || '请求的资源不存在'
+      } else if (status === 429) {
+        friendly = '请求过于频繁，请稍后再试'
+      } else if (status && status >= 500) {
+        friendly = data?.detail || data?.message || '服务器开小差了，请稍后重试'
+      } else if (error.code === 'ECONNABORTED') {
+        friendly = '请求超时，请检查网络后重试'
+      } else if (!navigator.onLine) {
+        friendly = '网络已断开，请检查网络连接'
+      } else {
+        friendly = msg || '请求失败，请重试'
+      }
+
+      return Promise.reject(new Error(friendly))
+    }
+    return Promise.reject(error)
+  }
+)
+
 // ─── Types ───────────────────────────────────────────────────────────────────
 
 export interface KLine {

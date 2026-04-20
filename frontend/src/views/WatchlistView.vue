@@ -88,7 +88,7 @@
 </template>
 
 <script setup lang="ts">
-import { ref, computed, onMounted } from 'vue'
+import { ref, computed, onMounted, onUnmounted } from 'vue'
 import { useRouter } from 'vue-router'
 import { useWatchlistStore } from '../stores/watchlist'
 import toast from '../composables/useToast'
@@ -98,6 +98,8 @@ const store = useWatchlistStore()
 const addCode = ref('')
 const sortKey = ref<string>('added_at')
 const sortDir = ref<'asc' | 'desc'>('desc')
+
+const AUTO_REFRESH_INTERVAL = 2 * 60 * 1000 // 2 minutes
 
 function setSort(key: string) {
   if (sortKey.value === key) {
@@ -159,17 +161,53 @@ async function addStock() {
     toast.warning('请输入有效的6位股票代码')
     return
   }
-  await store.addStock(code)
+  try {
+    await store.addStock(code)
+    toast.success('已添加到自选股')
+  } catch (e: any) {
+    toast.error(e.message || '添加失败，请重试')
+    return
+  }
   addCode.value = ''
-  toast.success('已添加到自选股')
 }
 
 async function removeStock(code: string) {
-  await store.removeStock(code)
+  try {
+    await store.removeStock(code)
+  } catch {
+    // 乐观更新失败，store 已回滚，只需提示
+  }
   toast.info('已从自选股移除')
 }
 
-onMounted(() => store.fetchWatchlist())
+let refreshTimer: ReturnType<typeof setInterval> | null = null
+
+function startAutoRefresh() {
+  if (refreshTimer) clearInterval(refreshTimer)
+  refreshTimer = setInterval(async () => {
+    try {
+      await store.fetchWatchlist()
+    } catch {
+      // silent refresh failure
+    }
+  }, AUTO_REFRESH_INTERVAL)
+}
+
+function stopAutoRefresh() {
+  if (refreshTimer) {
+    clearInterval(refreshTimer)
+    refreshTimer = null
+  }
+}
+
+onMounted(() => {
+  store.fetchWatchlist()
+  startAutoRefresh()
+})
+
+onUnmounted(() => {
+  stopAutoRefresh()
+})
 </script>
 
 <style scoped>

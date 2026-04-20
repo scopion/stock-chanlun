@@ -40,6 +40,7 @@ const chartRef = ref<HTMLDivElement | null>(null)
 const barInfoText = ref('')
 let chart: echarts.ECharts | null = null
 let graphicRaf = 0
+let resizeObserver: ResizeObserver | null = null
 
 // ── 指标配置 ────────────────────────────────────────────────────────────────
 function getIndicators(): Required<IndicatorConfig> {
@@ -326,7 +327,7 @@ function queueGraphic() {
 }
 
 // ── 构建 ECharts Option ───────────────────────────────────────────────────────
-function buildOption() {
+function buildOption(chartH: number = 300) {
   const klines = props.klines
   if (!klines.length) return {}
 
@@ -353,7 +354,7 @@ function buildOption() {
 
   // 副图开关
   const subCount = [ind.volume, ind.macd, ind.rsi, ind.skdj].filter(Boolean).length
-  const chartHeight = 300
+  const chartHeight = chartH
   const gap = 6
   const subHeight = subCount > 0 ? ((chartHeight * 0.6 - gap) / subCount) : 0
   const mainH = subCount > 0 ? chartHeight * 0.38 : chartHeight
@@ -514,7 +515,7 @@ function initChart() {
   if (!chartRef.value) return
   chart = echarts.init(chartRef.value)
 
-  const opt = buildOption()
+  const opt = buildOption(chartRef.value.clientHeight)
   chart.setOption(opt)
 
   setBarInfoByIndex(props.klines.length - 1)
@@ -543,10 +544,14 @@ function initChart() {
 
 function updateChart() {
   if (!chart) { initChart(); return }
-  chart.setOption(buildOption())
+  chart.setOption(buildOption(chartRef.value?.clientHeight || 300))
   setBarInfoByIndex(props.klines.length - 1)
   overlayCache = buildOverlayData()
   queueGraphic()
+}
+
+function getContainerHeight(): number {
+  return chartRef.value?.clientHeight || 300
 }
 
 function onResize() {
@@ -557,10 +562,18 @@ function onResize() {
 onMounted(() => {
   initChart()
   window.addEventListener('resize', onResize)
+  if (chartRef.value) {
+    resizeObserver = new ResizeObserver(() => {
+      chart?.resize()
+      queueGraphic()
+    })
+    resizeObserver.observe(chartRef.value)
+  }
 })
 
 onUnmounted(() => {
   cancelAnimationFrame(graphicRaf)
+  resizeObserver?.disconnect()
   if (chart) {
     chart.dispose()
     chart = null
@@ -577,19 +590,24 @@ watch(
 
 <style scoped>
 .kline-wrap {
-  position: relative;
   width: 100%;
+  height: 100%;
   border-radius: 10px;
   overflow: hidden;
   background: var(--bg-elevated);
+  position: relative;
 }
 
 .kline-chart {
   width: 100%;
-  height: 300px;
+  height: 100%;
 }
 
 .bar-info {
+  position: absolute;
+  bottom: 0;
+  left: 0;
+  right: 0;
   padding: 6px 10px 8px;
   font-family: var(--font-mono);
   font-size: 10px;

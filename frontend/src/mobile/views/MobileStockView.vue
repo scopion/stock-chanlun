@@ -271,8 +271,10 @@ watch(() => route.params.code, () => { signalsExpanded.value = false; loadData()
 }
 
 .chart-section {
+  height: 380px;
   border-radius: 10px;
   overflow: hidden;
+  flex-shrink: 0;
 }
 
 .chart-controls {

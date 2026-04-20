@@ -85,7 +85,9 @@ function getContainer(): HTMLElement {
 
 function show(options: ToastOptions): () => void {
   injectStyles()
-  const { message, type, duration = 3000 } = options
+  const { message, type, duration: requestedDuration } = options
+  // 错误消息默认展示 4000ms，其他 2500ms
+  const duration = requestedDuration ?? (type === 'error' ? 4000 : 2500)
   const container = getContainer()
 
   const icons: Record<string, string> = {

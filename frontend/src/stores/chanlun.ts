@@ -108,10 +108,9 @@ export const useChanlunStore = defineStore('chanlun', () => {
     ])
   }
 
-  async function setAiModel(model: string) {
+  async function setAiModel(model: string, code: string) {
     aiModel.value = model
     await stockApi.setAiModel(model)
-    const code = ''
     await fetchAISignal(code, currentLevel.value)
   }
 

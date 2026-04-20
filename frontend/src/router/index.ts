@@ -10,7 +10,8 @@ import MobileStockView from '../mobile/views/MobileStockView.vue'
 import MobileWatchlistView from '../mobile/views/MobileWatchlistView.vue'
 
 const router = createRouter({
-  history: createWebHistory(),
+  // 与 vite.config.ts 的 base: '/stock-chanlun/' 保持一致
+  history: createWebHistory('/stock-chanlun/'),
   routes: [
     // ── PC 端路由 ──────────────────────────────────────────────────────
     { path: '/', component: HomeView },

@@ -125,12 +125,16 @@ const watchedCodes = computed(() => new Set(watchlistStore.stocks.map(s => s.cod
 function isWatched(code: string) { return watchedCodes.value.has(code) }
 
 async function toggleWatch(code: string) {
-  if (isWatched(code)) {
-    await watchlistStore.removeStock(code)
-    toast.info('已从自选股移除')
-  } else {
-    await watchlistStore.addStock(code)
-    toast.success('已添加到自选股')
+  try {
+    if (isWatched(code)) {
+      await watchlistStore.removeStock(code)
+      toast.info('已从自选股移除')
+    } else {
+      await watchlistStore.addStock(code)
+      toast.success('已添加到自选股')
+    }
+  } catch {
+    // 已在 store 回滚
   }
 }
 

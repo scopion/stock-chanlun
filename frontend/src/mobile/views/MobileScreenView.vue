@@ -256,7 +256,7 @@ async function doScreen() {
       }
     }
   } catch (e: any) {
-    screenError.value = e.message ?? '筛选失败'
+    screenError.value = e?.message ?? '筛选失败，请检查网络后重试'
     results.value = []
   } finally {
     screening.value = false

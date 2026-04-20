@@ -28,8 +28,9 @@
           <button class="btn btn-ghost" @click="loadData" :disabled="loadingAny">
             {{ loadingAny ? '加载中...' : '刷新' }}
           </button>
-          <button class="btn btn-ghost" @click="toggleWatch" :class="{ 'btn-danger': isWatching }">
-            {{ isWatching ? '取消自选' : '+自选' }}
+          <button class="btn btn-ghost" @click="toggleWatch" :class="{ 'btn-danger': isWatching, 'btn-loading': watchToggling }" :disabled="loadingAny || watchToggling">
+            <span v-if="watchToggling" class="btn-spinner" />
+            <span v-else>{{ isWatching ? '取消自选' : '+自选' }}</span>
           </button>
         </div>
       </div>
@@ -321,10 +322,11 @@
 </template>
 
 <script setup lang="ts">
-import { ref, computed, onMounted, watch, onUnmounted } from 'vue'
+import { ref, computed, onMounted, watch, onUnmounted, nextTick } from 'vue'
 import { useRoute } from 'vue-router'
 import { useChanlunStore, type LevelOption } from '../stores/chanlun'
 import { useCommentStore } from '../stores/comment'
+import { useWatchlistStore } from '../stores/watchlist'
 import { stockApi, type StockInfoFields, type StockExtras, type Quote } from '../api/stock'
 import toast from '../composables/useToast'
 import KLineChart from '../components/Chart/KLineChart.vue'
@@ -341,10 +343,17 @@ import AIChat from '../components/AIChat.vue'
 const route = useRoute()
 const store = useChanlunStore()
 const commentStore = useCommentStore()
+const watchlistStore = useWatchlistStore()
 const klineChartRef = ref<InstanceType<typeof KLineChart> | null>(null)
 
 const zoomStart = ref(0)
 const zoomEnd = ref(100)
+
+const watchToggling = ref(false)
+
+const isWatching = computed(() =>
+  watchlistStore.stocks.some(s => s.code === stockCode.value)
+)
 
 function onZoomChange(start: number, end: number) {
   zoomStart.value = start
@@ -369,7 +378,6 @@ const error = computed(() =>
 const quote = ref<Quote | null>(null)
 const stockInfo = ref<StockInfoFields | null>(null)
 const extras = ref<StockExtras | null>(null)
-const isWatching = ref(false)
 
 // 时间筛选
 function getOneYearAgo(): string {
@@ -381,9 +389,32 @@ function getOneYearAgo(): string {
 const startDate = ref(getOneYearAgo())
 const endDate = ref('')
 const showDatePanel = ref(false)
+const dateFilterRef = ref<HTMLElement | null>(null)
+let datePanelClickHandler: ((e: MouseEvent) => void) | null = null
 
 function toggleDatePanel() {
   showDatePanel.value = !showDatePanel.value
+  if (showDatePanel.value) {
+    nextTick(() => {
+      datePanelClickHandler = (e: MouseEvent) => {
+        const filterEl = document.querySelector('.date-filter')
+        if (filterEl && !filterEl.contains(e.target as Node)) {
+          showDatePanel.value = false
+          cleanupDatePanelHandler()
+        }
+      }
+      setTimeout(() => document.addEventListener('click', datePanelClickHandler!), 0)
+    })
+  } else {
+    cleanupDatePanelHandler()
+  }
+}
+
+function cleanupDatePanelHandler() {
+  if (datePanelClickHandler) {
+    document.removeEventListener('click', datePanelClickHandler)
+    datePanelClickHandler = null
+  }
 }
 
 function formatFilterText() {
@@ -401,11 +432,13 @@ function resetDateFilter() {
   startDate.value = getOneYearAgo()
   endDate.value = ''
   showDatePanel.value = false
+  cleanupDatePanelHandler()
   store.loadAll(stockCode.value, currentLevel.value)
 }
 
 function applyDateFilter() {
   showDatePanel.value = false
+  cleanupDatePanelHandler()
   store.loadAll(stockCode.value, currentLevel.value, startDate.value || undefined, endDate.value || undefined)
 }
 
@@ -582,20 +615,26 @@ async function changeLevel(level: LevelOption) {
 }
 
 async function toggleWatch() {
-  if (isWatching.value) {
-    await stockApi.removeWatch(stockCode.value)
-    isWatching.value = false
-    toast.success('已从自选股移除')
-  } else {
-    await stockApi.addWatch(stockCode.value)
-    isWatching.value = true
-    toast.success('已添加到自选股')
+  if (watchToggling.value) return
+  watchToggling.value = true
+  try {
+    if (isWatching.value) {
+      await watchlistStore.removeStock(stockCode.value)
+      toast.success('已从自选股移除')
+    } else {
+      await watchlistStore.addStock(stockCode.value)
+      toast.success('已添加到自选股')
+    }
+  } catch (e: any) {
+    toast.error(e.message || '操作失败，请重试')
+  } finally {
+    watchToggling.value = false
   }
 }
 
 async function switchModel(model: string) {
   if (model === store.aiModel) return
-  await store.setAiModel(model)
+  await store.setAiModel(model, stockCode.value)
   await store.loadAll(stockCode.value, store.currentLevel)
 }
 
@@ -723,6 +762,17 @@ watch(() => route.params.code, loadData)
   border-radius: 50%;
   animation: spin 0.8s linear infinite;
 }
+.btn-spinner {
+  display: inline-block;
+  width: 12px;
+  height: 12px;
+  border: 1.5px solid currentColor;
+  border-top-color: transparent;
+  border-radius: 50%;
+  animation: spin 0.7s linear infinite;
+}
+.btn-loading { opacity: 0.7; cursor: not-allowed !important; }
+.btn-danger { color: var(--accent-red) !important; }
 
 .error-page {
   text-align: center;

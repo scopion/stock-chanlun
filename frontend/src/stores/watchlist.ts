@@ -31,20 +31,29 @@ export const useWatchlistStore = defineStore('watchlist', () => {
   }
 
   async function addStock(code: string) {
+    if (stocks.value.some(s => s.code === code)) {
+      const err = new Error('该股票已在自选列表中')
+      error.value = err.message
+      throw err
+    }
     try {
       await stockApi.addWatch(code)
       await fetchWatchlist()
     } catch (e: any) {
       error.value = e.message
+      throw e
     }
   }
 
   async function removeStock(code: string) {
+    const snapshot = [...stocks.value]
+    stocks.value = stocks.value.filter(s => s.code !== code)
     try {
       await stockApi.removeWatch(code)
-      stocks.value = stocks.value.filter(s => s.code !== code)
     } catch (e: any) {
+      stocks.value = snapshot
       error.value = e.message
+      throw e
     }
   }
 
