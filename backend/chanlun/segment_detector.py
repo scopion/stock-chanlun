@@ -51,7 +51,8 @@ class SegmentDetector:
                 while extended and extend_iterations < 1000:
                     extended = False
                     extend_iterations += 1
-                    next_idx = i + len(group)
+                    # 依据当前已并入的笔数量推进索引，避免重复读取同一根笔
+                    next_idx = i + len(bi_ids)
                     if next_idx < len(self.bis):
                         next_b = self.bis[next_idx]
                         if next_b.direction == direction:
