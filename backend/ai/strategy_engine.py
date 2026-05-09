@@ -200,7 +200,19 @@ class StrategyEngine:
             parts.append("暂无明确信号")
 
         if self.divergence:
-            parts.append(f"背驰概率: {self.divergence.get('probability', 0):.0%}")
+            div = self.divergence
+            mf = div.get("macd_force")
+            mf_cn = {"directional": "同向柱", "abs": "绝对值"}.get(mf, "")
+            extras: list[str] = []
+            if div.get("rsi_confirm"):
+                extras.append("RSI")
+            if div.get("kdj_confirm"):
+                extras.append("KDJ")
+            osc = f" {'/'.join(extras)}确认" if extras else ""
+            mf_suffix = f"({mf_cn})" if mf_cn else ""
+            parts.append(
+                f"背驰概率: {div.get('probability', 0):.0%}{mf_suffix}{osc}"
+            )
 
         if self.zhongshus:
             last_zs = self.zhongshus[-1]

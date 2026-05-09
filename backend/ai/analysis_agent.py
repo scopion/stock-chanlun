@@ -6,11 +6,44 @@ import re
 from typing import Optional
 
 
+def _format_divergence_for_prompt(divergence: dict) -> str:
+    """将背驰检测结果格式化为模型可读的多行文本"""
+    force = divergence.get("macd_force")
+    force_cn = {
+        "directional": "同向柱累计",
+        "abs": "绝对值面积(震荡回退)",
+    }.get(str(force), str(force) if force is not None else "未知")
+
+    def _yn(val: object) -> str:
+        if val is True:
+            return "是"
+        if val is False:
+            return "否"
+        return "未知"
+
+    osc = (
+        f"RSI{_yn(divergence.get('rsi_confirm'))} "
+        f"KDJ{_yn(divergence.get('kdj_confirm'))}"
+    )
+
+    lines = [
+        f"  类型:{divergence.get('type')} 概率:{divergence.get('probability')} "
+        f"MACD力度比:{divergence.get('macd_ratio')} 力度算法:{force_cn}",
+        f"  振荡器背离确认:{osc}",
+        f"  描述:{divergence.get('description', '')}",
+    ]
+    if "price_drop" in divergence:
+        lines.append(f"  价格下探幅度(相对前低):{divergence['price_drop']}")
+    if "price_rise" in divergence:
+        lines.append(f"  价格冲高幅度(相对前高):{divergence['price_rise']}")
+    return "\n".join(lines) + "\n"
+
+
 SYSTEM_PROMPT = """你是专业的缠论技术分析助手，帮助用户分析股票走势并给出操作建议。
 
 分析规则：
 1. 只基于用户提供的 K线/缠论数据进行分析，不臆测
-2. 结合背驰、级别共振、中枢位置综合判断
+2. 结合背驰、级别共振、中枢位置综合判断；背驰段落中的力度算法与 RSI/KDJ 确认状态须一并参考
 3. 输出结构化 JSON，不要输出多余文字
 
 回复格式（严格 JSON）：
@@ -58,10 +91,10 @@ def build_analysis_prompt(
         for z in zhongshus[-3:]:
             zs_text += f"  [{z['start']} ~ {z['end']}] 中枢 高:{z['range_high']} 低:{z['range_low']}\n"
 
-    # 背驰
+    # 背驰（力度算法、振荡器确认一并给出，便于模型综合判断）
     div_text = ""
     if divergence:
-        div_text = f"  类型:{divergence.get('type')} 概率:{divergence.get('probability')} 描述:{divergence.get('description','')}\n"
+        div_text = _format_divergence_for_prompt(divergence)
 
     # 买卖点
     sig_text = ""
