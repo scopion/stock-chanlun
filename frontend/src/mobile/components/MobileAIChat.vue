@@ -41,7 +41,7 @@
         v-model="inputText"
         class="input-field"
         :placeholder="`询问 ${stockCode} 的走势...`"
-        rows="1"
+        rows="2"
         @keydown.enter.exact.prevent="sendMessage"
         @input="autoResize"
       />
@@ -100,6 +100,9 @@ async function sendMessage() {
   })
   inputText.value = ''
   await nextTick()
+  if (inputRef.value) {
+    inputRef.value.style.height = ''
+  }
   scrollToBottom()
 
   const aiMsgIdx = messages.value.length
@@ -140,10 +143,13 @@ function scrollToBottom() {
   }
 }
 
+const INPUT_MIN_HEIGHT_PX = 52
+
 function autoResize(e: Event) {
   const el = e.target as HTMLTextAreaElement
   el.style.height = 'auto'
-  el.style.height = Math.min(el.scrollHeight, 100) + 'px'
+  el.style.height =
+    Math.min(Math.max(el.scrollHeight, INPUT_MIN_HEIGHT_PX), 120) + 'px'
 }
 </script>
 
@@ -264,11 +270,14 @@ function autoResize(e: Event) {
   border-radius: 20px;
   padding: 9px 14px;
   font-size: 0.85rem;
+  line-height: 1.55;
   color: var(--text-primary);
   resize: none;
   outline: none;
-  max-height: 100px;
+  min-height: 52px;
+  max-height: 120px;
   font-family: inherit;
+  box-sizing: border-box;
   transition: border-color 0.15s;
 }
 .input-field:focus {

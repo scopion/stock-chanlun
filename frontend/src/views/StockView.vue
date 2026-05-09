@@ -66,7 +66,8 @@
       </button>
     </div>
 
-    <div v-else class="main-grid" :style="mainGridStyle">
+    <template v-else>
+    <div class="main-grid" :style="mainGridStyle">
       <!-- Left: Stock info -->
       <aside v-if="layout.leftVisible" class="sidebar">
         <div class="card stock-info-card">
@@ -316,11 +317,12 @@
 
       <!-- Right: AI Strategy + Notes -->
       <aside v-if="layout.rightVisible" class="sidebar-right">
-        <AIChat :stock-code="stockCode" />
         <CommentSection :stock-code="stockCode" />
         <StrategyCard :signal="store.aiSignal" :updated-at="store.aiUpdatedAt" />
       </aside>
     </div>
+    <AiSuspendedBallChat :stock-code="stockCode" />
+    </template>
   </div>
 </template>
 
@@ -341,7 +343,7 @@ import SignalCard from '../components/Signal/SignalCard.vue'
 import StrategyCard from '../components/Signal/StrategyCard.vue'
 import IndicatorSelector from '../components/IndicatorSelector.vue'
 import CommentSection from '../components/Signal/CommentSection.vue'
-import AIChat from '../components/AIChat.vue'
+import AiSuspendedBallChat from '../components/AiSuspendedBallChat.vue'
 
 const route = useRoute()
 const store = useChanlunStore()

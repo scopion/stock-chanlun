@@ -1,5 +1,5 @@
 <template>
-  <div class="card ai-chat-card">
+  <div class="card ai-chat-card" :class="{ 'ai-chat-card--floating': floating }">
     <div class="card-header">
       <div class="card-title-row">
         <span class="card-title">AI 诊股</span>
@@ -92,7 +92,7 @@
           v-model="inputText"
           class="input-field"
           :placeholder="`询问 ${stockCode} 的走势...`"
-          rows="1"
+          rows="2"
           @keydown.enter.exact.prevent="sendMessage"
           @keydown.enter.shift.exact="null"
           @input="autoResize"
@@ -118,7 +118,10 @@ import { ref, nextTick } from 'vue'
 import { stockApi } from '@/api/stock'
 import toast from '@/composables/useToast'
 
-const props = defineProps<{ stockCode: string }>()
+const props = withDefaults(
+  defineProps<{ stockCode: string; floating?: boolean }>(),
+  { floating: false }
+)
 
 interface Message {
   role: 'user' | 'assistant'
@@ -161,6 +164,9 @@ async function sendMessage() {
   })
   inputText.value = ''
   await nextTick()
+  if (inputRef.value) {
+    inputRef.value.style.height = ''
+  }
   scrollToBottom()
 
   // 添加空的 AI 消息占位
@@ -218,10 +224,13 @@ function scrollToBottom() {
   }
 }
 
+const INPUT_MIN_HEIGHT_PX = 52
+
 function autoResize(e: Event) {
   const el = e.target as HTMLTextAreaElement
   el.style.height = 'auto'
-  el.style.height = Math.min(el.scrollHeight, 120) + 'px'
+  el.style.height =
+    Math.min(Math.max(el.scrollHeight, INPUT_MIN_HEIGHT_PX), 140) + 'px'
 }
 
 function clearChat() {
@@ -238,6 +247,16 @@ function clearChat() {
   max-height: 320px;
   overflow: hidden;
   flex-shrink: 0;
+}
+
+.ai-chat-card--floating {
+  max-height: min(72vh, 520px);
+  min-height: 280px;
+  width: 100%;
+  border: none;
+  box-shadow: none;
+  background: transparent;
+  border-radius: 0;
 }
 
 /* Header */
@@ -489,11 +508,13 @@ function clearChat() {
   border: none;
   outline: none;
   font-size: 0.8125rem;
-  line-height: 1.5;
+  line-height: 1.55;
   color: var(--text-primary);
   resize: none;
-  max-height: 120px;
+  min-height: 52px;
+  max-height: 140px;
   font-family: inherit;
+  box-sizing: border-box;
 }
 
 .input-field::placeholder { color: var(--text-muted); }

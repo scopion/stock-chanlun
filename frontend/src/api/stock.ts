@@ -491,7 +491,19 @@ export const stockApi = {
 
     const resp = await fetch(url)
     if (!resp.ok) {
-      throw new Error(`请求失败: ${resp.status}`)
+      let detail = ''
+      try {
+        detail = (await resp.clone().text()).trim()
+      } catch {
+        /* ignore */
+      }
+      const hint =
+        detail && detail.length < 800 && !detail.includes('<!DOCTYPE')
+          ? detail
+          : ''
+      throw new Error(
+        hint ? `请求失败 (${resp.status}): ${hint}` : `请求失败: ${resp.status}`
+      )
     }
 
     const reader = resp.body?.getReader()

@@ -2,8 +2,8 @@ from __future__ import annotations
 
 import asyncio
 import json
+import logging
 import os
-import sys
 
 import httpx
 from fastapi import APIRouter, Query, Request
@@ -15,6 +15,7 @@ from deps import check_ai_diagnosis_rate_limits, client_ip
 from services.akshare_service import get_stock_info, normalize_stock_code
 
 router = APIRouter()
+log = logging.getLogger(__name__)
 
 
 @router.get("/api/ai/diagnosis", tags=["AI诊股"])
@@ -27,20 +28,23 @@ async def ai_diagnosis(
 ):
     check_ai_diagnosis_rate_limits(client_ip(request))
 
-    sys.stdout.write(
-        f"[AI诊断] GET 请求进入，code={code}, question={question[:20]}, session={session_id}\n"
+    log.info(
+        "AI诊断 GET code=%s question=%s session=%s",
+        code,
+        question[:80],
+        session_id,
     )
-    sys.stdout.flush()
 
     if model not in ("deepseek", "gemini"):
         model = "deepseek"
 
     async def event_stream():
-        sys.stdout.write(f"[AI诊断] event_stream 启动，session={session_id}\n")
-        sys.stdout.flush()
         try:
-            sys.stdout.write(f"[AI诊断] 准备处理，model={model}\n")
-            sys.stdout.flush()
+            # 必须为首条 yield：run_server 重定向 stdout 后，若在首次 chunk 前写 stdout 可能触发异常导致整块 500
+            yield ": stream-open\n\n"
+
+            log.debug("AI诊断 event_stream 启动 session=%s", session_id)
+            log.debug("AI诊断 准备处理 model=%s", model)
             sym, _exchange = normalize_stock_code(code)
 
             stock_name = ""
@@ -111,10 +115,7 @@ async def ai_diagnosis(
                         yield f"data: {json.dumps({'error': 'DEEPSEEK_API_KEY 未设置，请在 .env 中配置'}, ensure_ascii=False)}\n\n"
                         return
 
-                    sys.stdout.write(
-                        f"[AI诊断] DeepSeek 流式调用开始，session={session_id}\n"
-                    )
-                    sys.stdout.flush()
+                    log.info("AI诊断 DeepSeek 流式开始 session=%s", session_id)
                     body = {
                         "model": "deepseek-chat",
                         "messages": messages,
@@ -131,10 +132,11 @@ async def ai_diagnosis(
                             },
                             json=body,
                         ) as resp:
-                            sys.stdout.write(
-                                f"[AI诊断] DeepSeek 响应状态: {resp.status_code}\n"
+                            log.info(
+                                "AI诊断 DeepSeek HTTP 状态 session=%s status=%s",
+                                session_id,
+                                resp.status_code,
                             )
-                            sys.stdout.flush()
                             resp.raise_for_status()
                             async for line in resp.aiter_lines():
                                 if not line.strip() or not line.startswith("data:"):
@@ -154,10 +156,11 @@ async def ai_diagnosis(
                                         yield f"data: {json.dumps({'token': content}, ensure_ascii=False)}\n\n"
                                 except json.JSONDecodeError:
                                     continue
-                    sys.stdout.write(
-                        f"[AI诊断] DeepSeek 流式完成，回复长度: {len(full_text)}\n"
+                    log.info(
+                        "AI诊断 DeepSeek 完成 session=%s chars=%s",
+                        session_id,
+                        len(full_text),
                     )
-                    sys.stdout.flush()
 
                 elif model.startswith("gemini"):
                     key = os.environ.get("GEMINI_API_KEY", "").strip()
@@ -185,6 +188,7 @@ async def ai_diagnosis(
             yield f"data: {json.dumps({'done': True, 'full': full_text}, ensure_ascii=False)}\n\n"
 
         except Exception as e:
+            log.exception("AI诊断流未捕获异常 session=%s", session_id)
             yield f"data: {json.dumps({'error': str(e)}, ensure_ascii=False)}\n\n"
 
     return StreamingResponse(

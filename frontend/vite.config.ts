@@ -6,8 +6,12 @@ import { resolve } from 'path'
 export default defineConfig(({ mode }) => {
   const env = loadEnv(mode, process.cwd(), '')
   const basePath = (env.VITE_BASE_URL || '/stock-chanlun/').replace(/\/+$/, '')
+  // 默认 8010：Windows 上 8000 常被不明进程占用，会导致代理打到异常监听（如 AI 诊股 SSE 返回 500）
+  const apiDevTarget =
+    (env.VITE_API_PROXY_TARGET && env.VITE_API_PROXY_TARGET.trim()) ||
+    'http://127.0.0.1:8010'
   const apiProxy = {
-    target: 'http://127.0.0.1:8000',
+    target: apiDevTarget,
     changeOrigin: true,
   } as const
   const proxy: Record<string, { target: string; changeOrigin: boolean; rewrite?: (p: string) => string }> = {
