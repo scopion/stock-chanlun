@@ -24,16 +24,9 @@ class SegmentDetector:
 
     # ── 线段 ────────────────────────────────────────────────────
 
-    def detect_segments(self, min_overlap_bis: int = 3,
-                        max_iterations: int = 10000,
-                        max_bi_per_segment: int = 20) -> list[XiangSegment]:
+    def detect_segments(self, max_iterations: int = 10000) -> list[XiangSegment]:
         """
-        检测线段（至多3笔 + 涨跌幅≥10%时可少笔）
-
-        规则：
-        - 每段至多 3 笔
-        - 若段内价格涨跌幅 ≥ 10%，1–2 笔也可成段
-        - 段方向取多数笔方向
+        检测线段: 每 3 笔构成一段, 尾部不足 3 笔也成段
         """
         if len(self.bis) == 0:
             return []
@@ -47,77 +40,29 @@ class SegmentDetector:
             if iterations > max_iterations:
                 break
 
-            seg, next_i = self._build_one_segment(i, len(segments) + 1)
-            segments.append(seg)
-            i = next_i
+            # 取至多 3 笔
+            end = min(i + 3, len(self.bis))
+            seg_bis = self.bis[i:end]
 
-        return segments
-
-    def _build_one_segment(self, start_idx: int,
-                           seg_num: int) -> tuple[XiangSegment, int]:
-        """从 start_idx 开始构建一条线段，返回 (线段, 下一索引)
-
-        至多 3 笔；价格涨跌幅 ≥ 10% 时 1–2 笔也可成段。
-        """
-        MIN_CHANGE = 0.10  # 10% 涨跌幅阈值
-
-        bi_indices = [start_idx]
-        j = start_idx + 1
-
-        # 先取至多 3 笔
-        while j < len(self.bis) and len(bi_indices) < 3:
-            bi_indices.append(j)
-            j += 1
-
-        # 计算段区间涨跌幅
-        seg_bis = [self.bis[k] for k in bi_indices]
-        rng_high = max(b.high for b in seg_bis)
-        rng_low = min(b.low for b in seg_bis)
-        change_pct = (rng_high - rng_low) / rng_low if rng_low > 0 else 0
-
-        # 不足 3 笔且涨跌幅 < 10% → 继续纳入（最多到 3 笔）
-        while (len(bi_indices) < 3 and j < len(self.bis)
-               and change_pct < MIN_CHANGE):
-            bi_indices.append(j)
-            j += 1
-            seg_bis = [self.bis[k] for k in bi_indices]
             rng_high = max(b.high for b in seg_bis)
             rng_low = min(b.low for b in seg_bis)
-            change_pct = (rng_high - rng_low) / rng_low if rng_low > 0 else 0
+            up_n = sum(1 for b in seg_bis if b.direction == "up")
+            down_n = sum(1 for b in seg_bis if b.direction == "down")
+            seg_dir = "up" if up_n >= down_n else "down"
 
-        # 涨跌幅达标 → 截断多余笔，段在当前位置结束
-        if change_pct >= MIN_CHANGE and len(bi_indices) > 1:
-            # 回缩：从后往前找，保留满足 ≥10% 的最少笔
-            for trim_n in range(1, len(bi_indices)):
-                trial_bis = [self.bis[k] for k in bi_indices[:trim_n]]
-                t_high = max(b.high for b in trial_bis)
-                t_low = min(b.low for b in trial_bis)
-                t_pct = (t_high - t_low) / t_low if t_low > 0 else 0
-                if t_pct >= MIN_CHANGE:
-                    bi_indices = bi_indices[:trim_n]
-                    j = start_idx + trim_n  # 下一段起点
-                    seg_bis = trial_bis
-                    rng_high = t_high
-                    rng_low = t_low
-                    break
+            segments.append(XiangSegment(
+                id=f"xiang_{len(segments)+1}",
+                start=seg_bis[0].start,
+                end=seg_bis[-1].end,
+                direction=seg_dir,
+                high=rng_high,
+                low=rng_low,
+                bi_ids=[b.id for b in seg_bis],
+                level=2,
+            ))
+            i = end
 
-        # 段方向取多数笔方向
-        seg_bis = [self.bis[k] for k in bi_indices]
-        up_n = sum(1 for b in seg_bis if b.direction == "up")
-        down_n = sum(1 for b in seg_bis if b.direction == "down")
-        seg_dir = "up" if up_n >= down_n else "down"
-
-        seg = XiangSegment(
-            id=f"xiang_{seg_num}",
-            start=seg_bis[0].start,
-            end=seg_bis[-1].end,
-            direction=seg_dir,
-            high=rng_high,
-            low=rng_low,
-            bi_ids=[b.id for b in seg_bis],
-            level=2,
-        )
-        return seg, j
+        return segments
 
     def _has_overlap(self, bis_group: list[Bi]) -> bool:
         """判断一组笔是否有重叠"""

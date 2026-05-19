@@ -52,7 +52,7 @@ class ChanlunEngine:
 
         # 3. 线段识别
         seg_detector = SegmentDetector(bis)
-        segments = seg_detector.detect_segments(min_overlap_bis=3)
+        segments = seg_detector.detect_segments()
 
         # 4. 中枢识别
         zhongshus = seg_detector.detect_zhongshus(segments)

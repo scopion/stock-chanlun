@@ -43,16 +43,16 @@ class SegmentDetectorTests(unittest.TestCase):
             level=2,
         )
 
-    def test_detect_segments_1bi_per_segment_when_change_over_10pct(self):
-        # 每笔涨跌幅 ≥10%，各自独立成段
+    def test_detect_segments_tail_under_3_bis(self):
+        # 2 笔不足 3 → 成 1 段
         detector = SegmentDetector(
             bis=[self._bi(1, "up", 0, 5, 11.0, 9.0), self._bi(2, "up", 6, 10, 12.0, 10.0)]
         )
         segs = detector.detect_segments()
-        self.assertEqual(len(segs), 2)  # 两笔各自成段
+        self.assertEqual(len(segs), 1)
 
-    def test_detect_segments_3bi_rule_with_10pct_threshold(self):
-        # 每笔涨跌幅均≥10% → 各自独立成段
+    def test_detect_segments_3bi_per_segment(self):
+        # 5 笔 → ceil(5/3)=2 段
         bis = [
             self._bi(1, "up", 0, 5, 11.0, 9.2),
             self._bi(2, "up", 6, 10, 11.8, 9.5),
@@ -62,10 +62,9 @@ class SegmentDetectorTests(unittest.TestCase):
         ]
         detector = SegmentDetector(bis=bis)
         segments = detector.detect_segments()
-        # 5 笔每笔振幅 ≥10% → 各成一段
-        self.assertEqual(len(segments), 5)
-        for i, seg in enumerate(segments):
-            self.assertEqual(seg.bi_ids, [f"bi_{i+1}"])
+        self.assertEqual(len(segments), 2)  # ceil(5/3)
+        self.assertEqual(segments[0].bi_ids, ["bi_1", "bi_2", "bi_3"])
+        self.assertEqual(segments[1].bi_ids, ["bi_4", "bi_5"])
 
     def test_detect_zhongshus_creates_one_from_three_overlapping_segments(self):
         segments = [
