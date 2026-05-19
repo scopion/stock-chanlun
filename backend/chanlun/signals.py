@@ -172,27 +172,28 @@ class SignalDetector:
 
     def _detect_2nd_buy(self, first_buys: list[BuySellPoint]) -> list[BuySellPoint]:
         """
-        二买: 一买后的回调低点（不破一买点），取所有有效回踩
+        二买: 只参照最近一个一买（避免旧一买产生的二买与当前趋势矛盾）
         """
         signals: list[BuySellPoint] = []
         if not first_buys or not self.bis:
             return signals
 
-        for fb in first_buys:
-            after_first = [b for b in self.bis
-                          if b.direction == "down"
-                          and b.end > fb.datetime]
-            for b in after_first:
-                if b.low >= fb.price * 0.97:
-                    signals.append(BuySellPoint(
-                        type="二买",
-                        level=self.level,
-                        price=float(b.low),
-                        datetime=b.end,
-                        confidence=0.70,
-                        stop_loss=float(min(b.low * 0.97, fb.price * 0.95)),
-                        description=f"回调二买: 回踩{b.low:.2f}不破一买{fb.price:.2f}"
-                    ))
+        # 只用最近一个一买作为参照
+        fb = first_buys[-1]
+        after_first = [b for b in self.bis
+                      if b.direction == "down"
+                      and b.end > fb.datetime]
+        for b in after_first:
+            if b.low >= fb.price * 0.97:
+                signals.append(BuySellPoint(
+                    type="二买",
+                    level=self.level,
+                    price=float(b.low),
+                    datetime=b.end,
+                    confidence=0.70,
+                    stop_loss=float(min(b.low * 0.97, fb.price * 0.95)),
+                    description=f"回调二买: 回踩{b.low:.2f}不破一买{fb.price:.2f}"
+                ))
         return signals
 
     def _detect_3rd_buy(self) -> list[BuySellPoint]:
@@ -303,26 +304,27 @@ class SignalDetector:
 
     def _detect_2nd_sell(self, first_sells: list[BuySellPoint]) -> list[BuySellPoint]:
         """
-        二卖: 一卖后反弹高点（不破一卖前高），取所有有效反弹
+        二卖: 只参照最近一个一卖（避免旧一卖产生的二卖与当前趋势矛盾）
         """
         signals: list[BuySellPoint] = []
         if not first_sells or not self.bis:
             return signals
 
-        for fs in first_sells:
-            after_first = [b for b in self.bis
-                          if b.direction == "up"
-                          and b.end > fs.datetime]
-            for b in after_first:
-                if b.high <= fs.price * 1.03:
-                    signals.append(BuySellPoint(
-                        type="二卖",
-                        level=self.level,
-                        price=float(b.high),
-                        datetime=b.end,
-                        confidence=0.65,
-                        description=f"二卖: 反弹{b.high:.2f}不破一卖{fs.price:.2f}"
-                    ))
+        # 只用最近一个一卖作为参照
+        fs = first_sells[-1]
+        after_first = [b for b in self.bis
+                      if b.direction == "up"
+                      and b.end > fs.datetime]
+        for b in after_first:
+            if b.high <= fs.price * 1.03:
+                signals.append(BuySellPoint(
+                    type="二卖",
+                    level=self.level,
+                    price=float(b.high),
+                    datetime=b.end,
+                    confidence=0.65,
+                    description=f"二卖: 反弹{b.high:.2f}不破一卖{fs.price:.2f}"
+                ))
         return signals
 
     def _detect_3rd_sell(self) -> list[BuySellPoint]:
@@ -594,6 +596,11 @@ class SignalDetector:
             if l3_up == 3:
                 return "上涨"
             if l3_down == 3:
+                return "下跌"
+            # 最近2笔同向且价格确认 → 早期反转优先于5笔窗口
+            if l3_up == 2 and l3_down == 1 and _bis_making_higher_highs(short):
+                return "上涨"
+            if l3_down == 2 and l3_up == 1 and _bis_making_lower_lows(short):
                 return "下跌"
             if s_up >= 4:
                 return "上涨"

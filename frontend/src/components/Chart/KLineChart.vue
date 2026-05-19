@@ -55,7 +55,7 @@ let chart: echarts.ECharts | null = null
 /** 获取指标配置，如果未提供则默认全部显示 */
 function getIndicators(): Required<IndicatorConfig> {
   return {
-    ma5: true, ma20: true, ma60: true,
+    ma5: true, ma20: true, ma10: true,
     bis: true, xiangs: false, zhongshus: true, signals: true, aiLines: true,
     supportResistance: true,
     volume: true, macd: true, rsi: true, skdj: true,
@@ -142,13 +142,13 @@ function fmtPrice(v: number | null | undefined): string {
 let lastDates: string[] = []
 let lastMa5: (number | null)[] = []
 let lastMa20: (number | null)[] = []
-let lastMa60: (number | null)[] = []
+let lastMa10: (number | null)[] = []
 
 function formatBarLine(idx: number): string {
   if (idx < 0 || idx >= props.klines.length) return ''
   const k = props.klines[idx]
   const d = lastDates[idx] ?? k.date.slice(0, 10)
-  return `${d}  开盘 ${fmtPrice(k.open)}  收盘 ${fmtPrice(k.close)}  最高 ${fmtPrice(k.high)}  最低 ${fmtPrice(k.low)}  |  MA5 ${fmtPrice(lastMa5[idx])}  MA20 ${fmtPrice(lastMa20[idx])}  MA60 ${fmtPrice(lastMa60[idx])}`
+  return `${d}  开盘 ${fmtPrice(k.open)}  收盘 ${fmtPrice(k.close)}  最高 ${fmtPrice(k.high)}  最低 ${fmtPrice(k.low)}  |  MA5 ${fmtPrice(lastMa5[idx])}  MA10 ${fmtPrice(lastMa10[idx])}  MA20 ${fmtPrice(lastMa20[idx])}`
 }
 
 function setBarInfoByIndex(idx: number) {
@@ -164,9 +164,9 @@ function buildOption() {
   const ind = getIndicators()
   const ma5 = ind.ma5 ? calcMA(closes, 5) : []
   const ma20 = ind.ma20 ? calcMA(closes, 20) : []
-  const ma60 = ind.ma60 ? calcMA(closes, 60) : []
+  const ma10 = ind.ma10 ? calcMA(closes, 10) : []
 
-  lastDates = dates; lastMa5 = ma5; lastMa20 = ma20; lastMa60 = ma60
+  lastDates = dates; lastMa5 = ma5; lastMa20 = ma20; lastMa10 = ma10
 
   // 预处理缠论数据，提前计算 bar 下标（修复 date 对不齐时 _e=-1 导致整段被跳过）
   const nBar = dates.length
@@ -217,8 +217,8 @@ function buildOption() {
     }
   ]
   if (ind.ma5) { legendData.push('MA5'); seriesList.push({ name: 'MA5', ...lineSeriesOpts, data: ma5, lineStyle: { width: 1, color: '#f0b429' }, emphasis: { disabled: true } }) }
+  if (ind.ma10) { legendData.push('MA10'); seriesList.push({ name: 'MA10', ...lineSeriesOpts, data: ma10, lineStyle: { width: 1, color: '#ff8c42' }, emphasis: { disabled: true } }) }
   if (ind.ma20) { legendData.push('MA20'); seriesList.push({ name: 'MA20', ...lineSeriesOpts, data: ma20, lineStyle: { width: 1, color: '#58a6ff' }, emphasis: { disabled: true } }) }
-  if (ind.ma60) { legendData.push('MA60'); seriesList.push({ name: 'MA60', ...lineSeriesOpts, data: ma60, lineStyle: { width: 1, color: '#bc8cff' }, emphasis: { disabled: true } }) }
 
   return {
     animation: false,
@@ -297,8 +297,8 @@ function buildOption() {
         html += `<div style="margin-top:6px;padding-top:6px;border-top:1px solid #30363d">`
         html += `<div style="margin-bottom:4px;color:#7d8590">均线</div>`
         html += `<span style="color:#f0b429">●</span> MA5 ${fmtPrice(ma5[idx])}　`
-        html += `<span style="color:#58a6ff">●</span> MA20 ${fmtPrice(ma20[idx])}　`
-        html += `<span style="color:#bc8cff">●</span> MA60 ${fmtPrice(ma60[idx])}`
+        html += `<span style="color:#ff8c42">●</span> MA10 ${fmtPrice(ma10[idx])}　`
+        html += `<span style="color:#58a6ff">●</span> MA20 ${fmtPrice(ma20[idx])}`
         html += `</div>`
 
         return html

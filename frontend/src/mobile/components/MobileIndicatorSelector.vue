@@ -96,8 +96,8 @@ const cfg = computed(() => store.indicators)
 
 const mainInds = [
   { key: 'ma5' as const, label: 'MA5', dotColor: '#f0b429', dotStyle: { background: '#f0b429' } },
+  { key: 'ma10' as const, label: 'MA10', dotColor: '#ff8c42', dotStyle: { background: '#ff8c42' } },
   { key: 'ma20' as const, label: 'MA20', dotColor: '#58a6ff', dotStyle: { background: '#58a6ff' } },
-  { key: 'ma60' as const, label: 'MA60', dotColor: '#bc8cff', dotStyle: { background: '#bc8cff' } },
 ]
 
 const chanlunInds = [

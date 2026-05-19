@@ -26,105 +26,95 @@ class SegmentDetector:
 
     def detect_segments(self, min_overlap_bis: int = 3,
                         max_iterations: int = 10000,
-                        max_bi_per_segment: int = 18) -> list[XiangSegment]:
+                        max_bi_per_segment: int = 20) -> list[XiangSegment]:
         """
-        检测线段（基于重叠 + 反向破坏判断）
+        检测线段（至多3笔 + 涨跌幅≥10%时可少笔）
 
-        max_bi_per_segment: 单线段最多包含的笔数，防止巨型线段吞噬整段历史。
-        日线 500 根 K 约 30-50 笔，限制 18 笔/段可得 2-4 段。
-
-        算法：
-        1. 从第一笔开始，尝试建立线段
-        2. 线段包含所有与当前"重叠箱体"有交集的笔（上限 max_bi_per_segment）
-        3. 当遇到不重叠的笔时：
-           - 若该笔反向破坏了线段起点 → 纳入该笔后终止线段
-           - 否则 → 线段在此结束
-        4. 继续从下一个未处理的笔开始
+        规则：
+        - 每段至多 3 笔
+        - 若段内价格涨跌幅 ≥ 10%，1–2 笔也可成段
+        - 段方向取多数笔方向
         """
-        if len(self.bis) < min_overlap_bis:
+        if len(self.bis) == 0:
             return []
 
         segments: list[XiangSegment] = []
         i = 0
         iterations = 0
 
-        while i <= len(self.bis) - min_overlap_bis:
+        while i < len(self.bis):
             iterations += 1
             if iterations > max_iterations:
                 break
 
-            # 检查起始3笔是否有重叠
-            group = self.bis[i:i + min_overlap_bis]
-            if not self._has_overlap(group):
-                i += 1
-                continue
-
-            # 构建线段（限制最大笔数防止巨型线段）
-            seg, next_i = self._build_one_segment(
-                i, len(segments) + 1, max_bi_count=max_bi_per_segment)
+            seg, next_i = self._build_one_segment(i, len(segments) + 1)
             segments.append(seg)
             i = next_i
 
         return segments
 
     def _build_one_segment(self, start_idx: int,
-                           seg_num: int,
-                           max_bi_count: int = 0) -> tuple[XiangSegment, int]:
+                           seg_num: int) -> tuple[XiangSegment, int]:
         """从 start_idx 开始构建一条线段，返回 (线段, 下一索引)
 
-        max_bi_count: 单线段最多包含的笔数（0=不限制）。
-        防止极宽区间吞噬全部历史笔形成巨型线段。
+        至多 3 笔；价格涨跌幅 ≥ 10% 时 1–2 笔也可成段。
         """
-        first = self.bis[start_idx]
-        direction = first.direction
-        seg_high = first.high
-        seg_low = first.low
-        seg_start = first.start
-        seg_end = first.end
-        bi_ids = [first.id]
-        # 记录线段起点的关键价格（用于破坏判断）
-        start_low = first.low
-        start_high = first.high
+        MIN_CHANGE = 0.10  # 10% 涨跌幅阈值
 
+        bi_indices = [start_idx]
         j = start_idx + 1
-        while j < len(self.bis):
-            nxt = self.bis[j]
 
-            # 容量已满 → 停止扩展，在当前位置结束线段
-            if max_bi_count > 0 and len(bi_ids) >= max_bi_count:
-                break
+        # 先取至多 3 笔
+        while j < len(self.bis) and len(bi_indices) < 3:
+            bi_indices.append(j)
+            j += 1
 
-            if self._overlaps(nxt, seg_high, seg_low):
-                # 重叠 → 纳入线段，扩展箱体
-                bi_ids.append(nxt.id)
-                seg_high = max(seg_high, nxt.high)
-                seg_low = min(seg_low, nxt.low)
-                seg_end = nxt.end
-                j += 1
-            else:
-                # 不重叠 → 检查是否为反向破坏
-                destroyed = False
-                if direction == "up" and nxt.low < start_low:
-                    destroyed = True
-                elif direction == "down" and nxt.high > start_high:
-                    destroyed = True
+        # 计算段区间涨跌幅
+        seg_bis = [self.bis[k] for k in bi_indices]
+        rng_high = max(b.high for b in seg_bis)
+        rng_low = min(b.low for b in seg_bis)
+        change_pct = (rng_high - rng_low) / rng_low if rng_low > 0 else 0
 
-                if destroyed:
-                    bi_ids.append(nxt.id)
-                    seg_high = max(seg_high, nxt.high)
-                    seg_low = min(seg_low, nxt.low)
-                    seg_end = nxt.end
-                    j += 1
-                break
+        # 不足 3 笔且涨跌幅 < 10% → 继续纳入（最多到 3 笔）
+        while (len(bi_indices) < 3 and j < len(self.bis)
+               and change_pct < MIN_CHANGE):
+            bi_indices.append(j)
+            j += 1
+            seg_bis = [self.bis[k] for k in bi_indices]
+            rng_high = max(b.high for b in seg_bis)
+            rng_low = min(b.low for b in seg_bis)
+            change_pct = (rng_high - rng_low) / rng_low if rng_low > 0 else 0
+
+        # 涨跌幅达标 → 截断多余笔，段在当前位置结束
+        if change_pct >= MIN_CHANGE and len(bi_indices) > 1:
+            # 回缩：从后往前找，保留满足 ≥10% 的最少笔
+            for trim_n in range(1, len(bi_indices)):
+                trial_bis = [self.bis[k] for k in bi_indices[:trim_n]]
+                t_high = max(b.high for b in trial_bis)
+                t_low = min(b.low for b in trial_bis)
+                t_pct = (t_high - t_low) / t_low if t_low > 0 else 0
+                if t_pct >= MIN_CHANGE:
+                    bi_indices = bi_indices[:trim_n]
+                    j = start_idx + trim_n  # 下一段起点
+                    seg_bis = trial_bis
+                    rng_high = t_high
+                    rng_low = t_low
+                    break
+
+        # 段方向取多数笔方向
+        seg_bis = [self.bis[k] for k in bi_indices]
+        up_n = sum(1 for b in seg_bis if b.direction == "up")
+        down_n = sum(1 for b in seg_bis if b.direction == "down")
+        seg_dir = "up" if up_n >= down_n else "down"
 
         seg = XiangSegment(
             id=f"xiang_{seg_num}",
-            start=seg_start,
-            end=seg_end,
-            direction=direction,
-            high=seg_high,
-            low=seg_low,
-            bi_ids=bi_ids,
+            start=seg_bis[0].start,
+            end=seg_bis[-1].end,
+            direction=seg_dir,
+            high=rng_high,
+            low=rng_low,
+            bi_ids=[b.id for b in seg_bis],
             level=2,
         )
         return seg, j

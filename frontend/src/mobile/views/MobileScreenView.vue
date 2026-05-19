@@ -136,6 +136,7 @@
             >{{ s.change_pct > 0 ? '+' : '' }}{{ s.change_pct.toFixed(2) }}%</div>
             <span v-if="s.latest_signal" class="rr-signal badge" :class="signalBadgeClass(s.latest_signal)">
               {{ s.latest_signal }}
+              <span v-if="s.latest_signal_date" class="rr-sig-date">{{ s.latest_signal_date }}</span>
             </span>
           </div>
         </button>
@@ -548,6 +549,12 @@ function signalBadgeClass(type: string) {
 .rr-signal {
   font-size: 0.65rem;
   padding: 2px 6px;
+}
+.rr-sig-date {
+  margin-left: 3px;
+  font-size: 0.6rem;
+  opacity: 0.7;
+  font-weight: 400;
 }
 
 .load-more-btn {

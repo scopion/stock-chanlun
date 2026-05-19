@@ -205,6 +205,7 @@
                   <span v-if="stock.latest_signal" class="sig-badge" :class="signalClass(stock.latest_signal)">
                     {{ stock.latest_signal }}
                     <span class="sig-conf">{{ stock.latest_signal_conf != null ? (stock.latest_signal_conf * 100).toFixed(0) + '%' : '' }}</span>
+                    <span v-if="stock.latest_signal_date" class="sig-date">{{ stock.latest_signal_date }}</span>
                   </span>
                   <span v-else class="sig-none">—</span>
                 </td>
@@ -663,6 +664,7 @@ function trendClass(trend: string): string {
 .sig-buy { background: rgba(34,197,94,0.1); color: var(--accent-green); }
 .sig-sell { background: rgba(239,68,68,0.1); color: var(--accent-red); }
 .sig-conf { margin-left: 4px; font-size: 0.7rem; opacity: 0.75; }
+.sig-date { margin-left: 4px; font-size: 0.7rem; opacity: 0.7; font-weight: 400; }
 .sig-none { color: var(--text-muted); }
 
 .cross-badge {

@@ -38,8 +38,8 @@
       </div>
       <div class="skel-ma-row">
         <div class="skel-dot ma5" />
+        <div class="skel-dot ma10" />
         <div class="skel-dot ma20" />
-        <div class="skel-dot ma60" />
       </div>
     </div>
   </div>
@@ -87,7 +87,7 @@ let touchCount = 0
 // ── 指标配置 ────────────────────────────────────────────────────────────────
 function getIndicators(): Required<IndicatorConfig> {
   return {
-    ma5: true, ma20: true, ma60: true,
+    ma5: true, ma20: true, ma10: true,
     bis: true, xiangs: false, zhongshus: true,
     signals: true, aiLines: true, supportResistance: true,
     volume: true, macd: false, rsi: false, skdj: false,
@@ -146,7 +146,7 @@ function calcMA(closes: number[], period: number): (number | null)[] {
 let lastDates: string[] = []
 let lastMa5: (number | null)[] = []
 let lastMa20: (number | null)[] = []
-let lastMa60: (number | null)[] = []
+let lastMa10: (number | null)[] = []
 
 function fmtPrice(v: number | null | undefined): string {
   if (v == null || Number.isNaN(v)) return '—'
@@ -157,7 +157,7 @@ function formatBarLine(idx: number): string {
   if (idx < 0 || idx >= props.klines.length) return ''
   const k = props.klines[idx]
   const d = lastDates[idx] ?? k.date.slice(0, 10)
-  return `${d}  开 ${fmtPrice(k.open)}  收 ${fmtPrice(k.close)}  高 ${fmtPrice(k.high)}  低 ${fmtPrice(k.low)}  |  MA5 ${fmtPrice(lastMa5[idx])}  MA20 ${fmtPrice(lastMa20[idx])}  MA60 ${fmtPrice(lastMa60[idx])}`
+  return `${d}  开 ${fmtPrice(k.open)}  收 ${fmtPrice(k.close)}  高 ${fmtPrice(k.high)}  低 ${fmtPrice(k.low)}  |  MA5 ${fmtPrice(lastMa5[idx])}  MA10 ${fmtPrice(lastMa10[idx])}  MA20 ${fmtPrice(lastMa20[idx])}`
 }
 
 function setBarInfoByIndex(idx: number) {
@@ -418,7 +418,7 @@ function buildOption(chartH: number = 300) {
   lastDates = dates
   lastMa5 = ind.ma5 ? calcMA(closes, 5) : []
   lastMa20 = ind.ma20 ? calcMA(closes, 20) : []
-  lastMa60 = ind.ma60 ? calcMA(closes, 60) : []
+  lastMa10 = ind.ma10 ? calcMA(closes, 10) : []
 
   // 副图计算
   const macdData = calcMACD(closes)
@@ -455,10 +455,10 @@ function buildOption(chartH: number = 300) {
   // 均线
   if (ind.ma5) seriesList.push({ name: 'MA5', type: 'line', data: lastMa5, xAxisIndex: 0, yAxisIndex: 0,
     lineStyle: { width: 1, color: '#f0b429' }, symbol: 'none', smooth: false, connectNulls: true, z: 4 })
+  if (ind.ma10) seriesList.push({ name: 'MA10', type: 'line', data: lastMa10, xAxisIndex: 0, yAxisIndex: 0,
+    lineStyle: { width: 1, color: '#ff8c42' }, symbol: 'none', smooth: false, connectNulls: true, z: 4 })
   if (ind.ma20) seriesList.push({ name: 'MA20', type: 'line', data: lastMa20, xAxisIndex: 0, yAxisIndex: 0,
-    lineStyle: { width: 1, color: '#38bdf8' }, symbol: 'none', smooth: false, connectNulls: true, z: 4 })
-  if (ind.ma60) seriesList.push({ name: 'MA60', type: 'line', data: lastMa60, xAxisIndex: 0, yAxisIndex: 0,
-    lineStyle: { width: 1, color: '#a78bfa' }, symbol: 'none', smooth: false, connectNulls: true, z: 4 })
+    lineStyle: { width: 1, color: '#58a6ff' }, symbol: 'none', smooth: false, connectNulls: true, z: 4 })
 
   // Main xAxis
   xAxes.push({ type: 'category', data: dates, gridIndex: 0, boundaryGap: true,
@@ -579,8 +579,8 @@ function buildOption(chartH: number = 300) {
           <div>高 ${fmtPrice(k.high)}  低 ${fmtPrice(k.low)}</div>
           <div style="color:${k.close >= k.open ? UP_COLOR : DOWN_COLOR}">${pctStr}${pct.toFixed(2)}%</div>
           ${ind.ma5 ? `<div><span style="color:#f0b429">MA5</span> ${fmtPrice(lastMa5[idx])}</div>` : ''}
-          ${ind.ma20 ? `<div><span style="color:#38bdf8">MA20</span> ${fmtPrice(lastMa20[idx])}</div>` : ''}
-          ${ind.ma60 ? `<div><span style="color:#a78bfa">MA60</span> ${fmtPrice(lastMa60[idx])}</div>` : ''}
+          ${ind.ma10 ? `<div><span style="color:#ff8c42">MA10</span> ${fmtPrice(lastMa10[idx])}</div>` : ''}
+          ${ind.ma20 ? `<div><span style="color:#58a6ff">MA20</span> ${fmtPrice(lastMa20[idx])}</div>` : ''}
         </div>`
       },
     }
@@ -826,7 +826,7 @@ watch(
 }
 .skel-dot.ma5 { background: linear-gradient(90deg, rgba(239,68,68,0.4) 25%, rgba(239,68,68,0.15) 50%, rgba(239,68,68,0.4) 75%); background-size: 200% 100%; }
 .skel-dot.ma20 { background: linear-gradient(90deg, rgba(34,197,94,0.4) 25%, rgba(34,197,94,0.15) 50%, rgba(34,197,94,0.4) 75%); background-size: 200% 100%; }
-.skel-dot.ma60 { background: linear-gradient(90deg, rgba(56,189,248,0.4) 25%, rgba(56,189,248,0.15) 50%, rgba(56,189,248,0.4) 75%); background-size: 200% 100%; }
+.skel-dot.ma10 { background: linear-gradient(90deg, rgba(56,189,248,0.4) 25%, rgba(56,189,248,0.15) 50%, rgba(56,189,248,0.4) 75%); background-size: 200% 100%; }
 
 @keyframes shimmer {
   0% { background-position: 200% 0; }

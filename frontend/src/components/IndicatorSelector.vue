@@ -25,20 +25,20 @@
             <label class="indicator-item">
               <input
                 type="checkbox"
+                :checked="indicators.ma10"
+                @change="store.toggleIndicator('ma10')"
+              />
+              <span class="indicator-dot" style="background: #ff8c42"></span>
+              <span>MA10</span>
+            </label>
+            <label class="indicator-item">
+              <input
+                type="checkbox"
                 :checked="indicators.ma20"
                 @change="store.toggleIndicator('ma20')"
               />
               <span class="indicator-dot" style="background: #58a6ff"></span>
               <span>MA20</span>
-            </label>
-            <label class="indicator-item">
-              <input
-                type="checkbox"
-                :checked="indicators.ma60"
-                @change="store.toggleIndicator('ma60')"
-              />
-              <span class="indicator-dot" style="background: #bc8cff"></span>
-              <span>MA60</span>
             </label>
           </div>
         </div>

@@ -43,34 +43,29 @@ class SegmentDetectorTests(unittest.TestCase):
             level=2,
         )
 
-    def test_detect_segments_returns_empty_when_bis_less_than_three(self):
+    def test_detect_segments_1bi_per_segment_when_change_over_10pct(self):
+        # 每笔涨跌幅 ≥10%，各自独立成段
         detector = SegmentDetector(
             bis=[self._bi(1, "up", 0, 5, 11.0, 9.0), self._bi(2, "up", 6, 10, 12.0, 10.0)]
         )
-        self.assertEqual(detector.detect_segments(), [])
+        segs = detector.detect_segments()
+        self.assertEqual(len(segs), 2)  # 两笔各自成段
 
-    def test_detect_segments_builds_segment_from_overlapping_same_direction_bis(self):
+    def test_detect_segments_3bi_rule_with_10pct_threshold(self):
+        # 每笔涨跌幅均≥10% → 各自独立成段
         bis = [
             self._bi(1, "up", 0, 5, 11.0, 9.2),
             self._bi(2, "up", 6, 10, 11.8, 9.5),
             self._bi(3, "up", 11, 15, 12.3, 9.8),
-            # 第4笔同向且重叠，应该延伸进同一个线段
             self._bi(4, "up", 16, 20, 12.8, 10.0),
-            # 反向笔但与线段范围重叠→纳入线段（改进后的线段包含所有重叠笔）
             self._bi(5, "down", 21, 25, 12.5, 9.4),
         ]
         detector = SegmentDetector(bis=bis)
-
         segments = detector.detect_segments()
-        self.assertEqual(len(segments), 1)
-        seg = segments[0]
-        self.assertEqual(seg.direction, "up")
-        # 反向笔 bi_5 与线段范围重叠 → 被纳入
-        self.assertEqual(seg.bi_ids, ["bi_1", "bi_2", "bi_3", "bi_4", "bi_5"])
-        self.assertEqual(seg.start, bis[0].start)
-        self.assertEqual(seg.end, bis[4].end)
-        self.assertAlmostEqual(seg.high, 12.8)
-        self.assertAlmostEqual(seg.low, 9.2)
+        # 5 笔每笔振幅 ≥10% → 各成一段
+        self.assertEqual(len(segments), 5)
+        for i, seg in enumerate(segments):
+            self.assertEqual(seg.bi_ids, [f"bi_{i+1}"])
 
     def test_detect_zhongshus_creates_one_from_three_overlapping_segments(self):
         segments = [
