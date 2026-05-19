@@ -228,8 +228,8 @@ def _get_quote_and_info(codes: list[str], need_industry: bool = False) -> dict[s
         norm_code = _normalize_code(code)
         q = qmap.get(norm_code, {})
         price = float(q.get("最新价") or q.get("price") or 0)
-        prev_close = float(q.get("昨收") or q.get("prev_close") or 0)
-        change_pct = ((price - prev_close) / prev_close * 100) if prev_close else 0.0
+        # 直接使用 API 返回的涨跌幅（data[32]），而非自行计算
+        change_pct = float(q.get("涨跌幅") or q.get("change_pct") or 0)
 
         result[code] = {
             "price": price,

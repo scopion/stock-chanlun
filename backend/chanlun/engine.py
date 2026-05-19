@@ -7,7 +7,6 @@ from .elements import (
     KLine, Bi, XiangSegment, Zhongshu, BuySellPoint,
     ChanlunAnalysis
 )
-from .kline_processor import KLineProcessor
 from .fenxing_detector import FenxingDetector
 from .bi_detector import BiDetector
 from .segment_detector import SegmentDetector
@@ -58,8 +57,10 @@ class ChanlunEngine:
         # 4. 中枢识别
         zhongshus = seg_detector.detect_zhongshus(segments)
 
-        # 5. 买卖点判定
-        sig_detector = SignalDetector(bis, segments, zhongshus, level=level)
+        # 5. 买卖点判定（传入原始K线DataFrame用于MACD背驰计算）
+        sig_detector = SignalDetector(bis, segments, zhongshus,
+                                       level=level,
+                                       klines_df=self.raw_klines)
         signals = sig_detector.detect_all()
         trend = sig_detector.detect_trend()
 

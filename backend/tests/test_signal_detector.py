@@ -56,7 +56,7 @@ class SignalDetectorTests(unittest.TestCase):
         self.assertEqual(signals[0].type, "二买")
         self.assertEqual(signals[0].datetime, crossing_bi.end)
 
-    def test_detect_3rd_buy_uses_latest_breakout_zhongshu(self):
+    def test_detect_3rd_buy_signals_from_multiple_zhongshus(self):
         detector = SignalDetector(bis=[], segments=[], zhongshus=[], level="daily")
 
         older = Zhongshu(
@@ -78,7 +78,7 @@ class SignalDetectorTests(unittest.TestCase):
             level=2,
         )
 
-        # 先有向上突破，再有回踩但不破中枢上沿 => 三买成立
+        # 同一笔突破同时突破两个中枢，回踩也不破任一中枢上沿
         break_up = self._bi(
             idx=2,
             direction="up",
@@ -100,10 +100,11 @@ class SignalDetectorTests(unittest.TestCase):
         detector.bis = [break_up, retest]
 
         signals = detector._detect_3rd_buy()
-        self.assertEqual(len(signals), 1)
-        self.assertEqual(signals[0].type, "三买")
+        # 改进后支持多中枢三买：两个中枢各产生一个三买信号
+        self.assertEqual(len(signals), 2)
+        self.assertTrue(all(s.type == "三买" for s in signals))
+        # 最近的信号来自 latest 中枢
         self.assertEqual(signals[0].stop_loss, latest.range_low)
-        self.assertIn("zs_latest", latest.id)
 
     def test_detect_support_resistance_dedup_keeps_stronger_level(self):
         detector = SignalDetector(bis=[], segments=[], zhongshus=[], level="daily")

@@ -76,6 +76,18 @@ class BuySellPoint(BaseModel):
     description: str = ""
 
 
+class SupportResistanceLevel(BaseModel):
+    """支撑位 / 阻力位"""
+    type: Literal["support", "resistance"]
+    price: float
+    # 来源说明
+    source: Literal["zhongshu", "bi_high", "bi_low", "kline_high", "kline_low", "signal"]
+    # 哪段历史笔 / 中枢产生的（便于定位）
+    related_id: str = ""
+    datetime: datetime
+    strength: float = Field(ge=0.0, le=1.0)  # 强度 0-1，越高越重要
+
+
 class ChanlunAnalysis(BaseModel):
     """完整缠论分析结果"""
     stock_code: str
@@ -113,15 +125,3 @@ class ASignal(BaseModel):
     multi_level_resonance: Optional[list[str]] = None  # 多级别共振信号
     description: str = ""
     signals: list[BuySellPoint]  # 关联的买卖点列表
-
-
-class SupportResistanceLevel(BaseModel):
-    """支撑位 / 阻力位"""
-    type: Literal["support", "resistance"]
-    price: float
-    # 来源说明
-    source: Literal["zhongshu", "bi_high", "bi_low", "kline_high", "kline_low", "signal"]
-    # 哪段历史笔 / 中枢产生的（便于定位）
-    related_id: str = ""
-    datetime: datetime
-    strength: float = Field(ge=0.0, le=1.0)  # 强度 0-1，越高越重要

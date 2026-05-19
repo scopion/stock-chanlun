@@ -56,7 +56,7 @@ class SegmentDetectorTests(unittest.TestCase):
             self._bi(3, "up", 11, 15, 12.3, 9.8),
             # 第4笔同向且重叠，应该延伸进同一个线段
             self._bi(4, "up", 16, 20, 12.8, 10.0),
-            # 反向笔，不参与上面线段延伸
+            # 反向笔但与线段范围重叠→纳入线段（改进后的线段包含所有重叠笔）
             self._bi(5, "down", 21, 25, 12.5, 9.4),
         ]
         detector = SegmentDetector(bis=bis)
@@ -65,9 +65,10 @@ class SegmentDetectorTests(unittest.TestCase):
         self.assertEqual(len(segments), 1)
         seg = segments[0]
         self.assertEqual(seg.direction, "up")
-        self.assertEqual(seg.bi_ids, ["bi_1", "bi_2", "bi_3", "bi_4"])
+        # 反向笔 bi_5 与线段范围重叠 → 被纳入
+        self.assertEqual(seg.bi_ids, ["bi_1", "bi_2", "bi_3", "bi_4", "bi_5"])
         self.assertEqual(seg.start, bis[0].start)
-        self.assertEqual(seg.end, bis[3].end)
+        self.assertEqual(seg.end, bis[4].end)
         self.assertAlmostEqual(seg.high, 12.8)
         self.assertAlmostEqual(seg.low, 9.2)
 

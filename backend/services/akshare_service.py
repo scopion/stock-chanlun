@@ -255,10 +255,10 @@ def get_realtime_quote(codes: list[str]) -> pd.DataFrame:
                         "涨跌幅": float(data[32]) if len(data) > 32 and data[32] else 0,
                         "成交量": float(data[6]) if data[6] else 0,
                         "成交额": float(data[37]) if len(data) > 37 and data[37] else 0,
-                        "今开": float(data[4]) if data[4] else 0,
+                        "昨收": float(data[4]) if data[4] else 0,
+                        "今开": float(data[5]) if data[5] else 0,
                         "最高": float(data[33]) if len(data) > 33 and data[33] else 0,
                         "最低": float(data[34]) if len(data) > 34 and data[34] else 0,
-                        "昨收": float(data[5]) if data[5] else 0,
                     })
                 except (ValueError, IndexError):
                     continue
@@ -1349,8 +1349,8 @@ def get_stock_info(code: str) -> dict:
                     "振幅": float(data[43]) if len(data) > 43 and data[43] else 0,
                     "最高": float(data[33]) if len(data) > 33 and data[33] else 0,
                     "最低": float(data[34]) if len(data) > 34 and data[34] else 0,
-                    "今开": float(data[4]) if data[4] else 0,
-                    "昨收": float(data[5]) if data[5] else 0,
+                    "昨收": float(data[4]) if data[4] else 0,
+                    "今开": float(data[5]) if data[5] else 0,
                     "市净率": float(data[46]) if len(data) > 46 and data[46] else 0,
                     "市盈率": float(data[39]) if len(data) > 39 and data[39] else 0,
                 }

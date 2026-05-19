@@ -215,12 +215,12 @@ async def _ai_signal_impl(code: str, level: str, model: str) -> dict:
         except Exception:
             pass
 
-    classifier = WaveClassifier()
-    wave_class = classifier.classify(result.xiangs, result.zhongshus, current_price)
+    # 使用缠论引擎统一趋势（与前端展示一致），WaveClassifier 仅用于多级别共振
+    trend = result.trend
 
     engine = StrategyEngine(
         signals=result.signals,
-        trend=wave_class["trend"],
+        trend=trend,
         current_price=current_price,
         current_level=level,
         zhongshus=result.zhongshus,
@@ -235,15 +235,11 @@ async def _ai_signal_impl(code: str, level: str, model: str) -> dict:
             daily_df = get_kline_hist(code, period="daily", adjust="qfq")
             if not daily_df.empty:
                 daily_result = ChanlunEngine(daily_df).analyze(level="daily")
-                daily_cls = WaveClassifier().classify(
-                    daily_result.xiangs,
-                    daily_result.zhongshus,
-                    float(daily_result.klines[-1].close) if daily_result.klines else 0.0,
-                )
+                classifier = WaveClassifier()
                 resonance = classifier.multi_level_resonance(
                     [
-                        {"trend": wave_class, "level": level},
-                        {"trend": daily_cls, "level": "daily"},
+                        {"trend": trend, "level": level},
+                        {"trend": daily_result.trend, "level": "daily"},
                     ]
                 )
         except Exception:
@@ -257,7 +253,7 @@ async def _ai_signal_impl(code: str, level: str, model: str) -> dict:
             code=code,
             level=level,
             klines=[k.__dict__ for k in result.klines],
-            trend=wave_class["trend"],
+            trend=trend,
             divergence=divergence,
             signals=[s.__dict__ for s in result.signals],
             zhongshus=[z.__dict__ for z in result.zhongshus],
@@ -284,7 +280,7 @@ async def _ai_signal_impl(code: str, level: str, model: str) -> dict:
         "take_profit": (lr.get("take_profit") if lr else None) or signal.take_profit,
         "holding_period": (lr.get("holding_period") if lr else None) or signal.holding_period,
         "description": (lr.get("reasoning") if lr else None) or signal.description,
-        "trend": wave_class["trend"],
+        "trend": trend,
         "divergence": divergence,
         "resonance": resonance,
         "llm": {
