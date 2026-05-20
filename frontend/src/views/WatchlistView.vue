@@ -152,7 +152,10 @@ function formatAddedTime(iso: string | undefined): string {
   }
 }
 
-function goToStock(code: string) { router.push(`/stock/${code}`) }
+function goToStock(code: string) {
+  const { href } = router.resolve(`/stock/${code}`)
+  window.open(href, '_blank', 'noopener,noreferrer')
+}
 
 async function addStock() {
   if (!addCode.value.trim()) return

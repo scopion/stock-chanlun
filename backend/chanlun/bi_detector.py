@@ -112,24 +112,24 @@ class BiDetector:
 
             if amp >= self.GAP_AMP_THRESHOLD:
                 # 按价格方向决定笔方向
-                if gap_high - prev.low >= prev.high - gap_low:
-                    # 向上突破
+                if gap_high - gap_low >= 0:
+                    # 向上
                     filled.append(Bi(
                         id=f"bi_up_gap_{len(filled)+1}",
                         start=prev.end, end=curr.start,
                         direction="up",
-                        high=gap_high, low=min(prev.low, gap_low),
-                        start_price=float(prev.end_price),
+                        high=gap_high, low=gap_low,
+                        start_price=gap_low,
                         end_price=gap_high,
                     ))
                 else:
-                    # 向下突破
+                    # 向下
                     filled.append(Bi(
                         id=f"bi_down_gap_{len(filled)+1}",
                         start=prev.end, end=curr.start,
                         direction="down",
-                        high=max(prev.high, gap_high), low=gap_low,
-                        start_price=float(prev.end_price),
+                        high=gap_high, low=gap_low,
+                        start_price=gap_high,
                         end_price=gap_low,
                     ))
 

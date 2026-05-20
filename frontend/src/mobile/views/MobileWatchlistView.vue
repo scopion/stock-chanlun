@@ -100,7 +100,8 @@ function fmtAdded(iso: string): string {
 }
 
 function go(path: string) {
-  router.push(path)
+  const { href } = router.resolve(path)
+  window.open(href, '_blank', 'noopener,noreferrer')
 }
 
 async function remove(code: string) {
