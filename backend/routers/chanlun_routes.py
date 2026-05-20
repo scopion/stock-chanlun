@@ -282,6 +282,7 @@ async def _ai_signal_impl(code: str, level: str, model: str) -> dict:
         "description": (lr.get("reasoning") if lr else None) or signal.description,
         "trend": trend,
         "divergence": divergence,
+        "divergence_level": level if divergence else None,
         "resonance": resonance,
         "llm": {
             "model": model,

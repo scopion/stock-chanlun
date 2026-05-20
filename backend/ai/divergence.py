@@ -1,5 +1,5 @@
 """
-背驰自动判断 — MACD面积 + RSI/KDJ背离检测
+背驰自动判断 — 成交量背驰 + RSI/KDJ背离检测
 """
 import pandas as pd
 import numpy as np
@@ -97,9 +97,9 @@ def _nan_extreme(series: pd.Series, *, high_extreme: bool) -> float:
 
 class DivergenceDetector:
     """
-    背驰检测:
-    1. MACD 同向柱面积对比（向上笔累计红柱、向下笔累计绿柱；过小则回退为绝对值面积）
-    2. RSI/KDJ 顶底背离（在 MACD 背驰前提下抬升概率）
+    背驰检测(成交量法):
+    1. 价格创新高/低 + 后段成交量 < 前段 × 0.7
+    2. RSI/KDJ 顶底背离（在成交量背驰前提下抬升概率）
     """
 
     def __init__(self, df: pd.DataFrame):
@@ -242,6 +242,7 @@ class DivergenceDetector:
         return {
             "type": seg_type,
             "probability": round(prob, 2),
+            "datetime": str(seg2.end)[:10] if hasattr(seg2, 'end') else "",
             change_key: pct_move,
             "vol_ratio": round(vol_ratio, 2),
             "vol_force": "volume",

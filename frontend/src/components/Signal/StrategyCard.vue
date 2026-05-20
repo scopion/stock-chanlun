@@ -67,6 +67,13 @@
           <span class="divergence-prob mono">{{ (signal.divergence.probability * 100).toFixed(0) }}%</span>
         </div>
         <div class="divergence-desc">{{ signal.divergence.description }}</div>
+        <div class="divergence-meta">
+          <span class="divergence-type" :class="signal.divergence.type === 'top' ? 'type-top' : 'type-bottom'">
+            {{ signal.divergence.type === 'top' ? '顶背驰' : '底背驰' }}
+          </span>
+          <span v-if="signal.divergence.datetime" class="divergence-date">{{ signal.divergence.datetime }}</span>
+          <span v-if="signal.divergence_level" class="divergence-level">{{ signal.divergence_level }}</span>
+        </div>
       </div>
 
       <!-- Resonance -->
@@ -181,7 +188,13 @@ function confColor(c: number) {
 }
 .divergence-header { display: flex; align-items: center; gap: 6px; font-size: 0.8rem; font-weight: 600; margin-bottom: 4px; color: var(--accent-blue); }
 .divergence-prob { color: var(--accent-blue); }
-.divergence-desc { font-size: 0.75rem; color: var(--text-secondary); }
+.divergence-desc { font-size: 0.75rem; color: var(--text-secondary); margin-bottom: 6px; }
+.divergence-meta { display: flex; align-items: center; gap: 8px; font-size: 0.7rem; }
+.divergence-type { padding: 1px 6px; border-radius: 4px; font-weight: 600; }
+.type-top { background: rgba(248,81,73,0.12); color: var(--accent-red); }
+.type-bottom { background: rgba(63,185,80,0.12); color: var(--accent-green); }
+.divergence-date { color: var(--text-muted); font-family: var(--font-mono); }
+.divergence-level { color: var(--accent-blue); font-weight: 600; }
 
 .resonance-block {
   display: flex;

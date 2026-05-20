@@ -1,8 +1,7 @@
 """
-买卖点判定模块 — 基于MACD标准背驰检测
+买卖点判定模块 — 基于成交量背驰检测
 """
 import pandas as pd
-import numpy as np
 from typing import Optional, Literal
 from datetime import datetime
 from .elements import Bi, XiangSegment, Zhongshu, BuySellPoint, SupportResistanceLevel
@@ -23,14 +22,6 @@ def _calc_macd(df: pd.DataFrame, fast: int = 12, slow: int = 26,
     return df
 
 
-def _macd_area_directional(bars: pd.Series, seg_type: str) -> float:
-    """与走势同向的 MACD 柱面积：顶背驰只算红柱(>0)，底背驰只算绿柱(<0)"""
-    arr = bars.to_numpy(dtype=float)
-    if seg_type == "top":
-        return float(np.nansum(np.maximum(arr, 0.0)))
-    return float(np.nansum(np.abs(np.minimum(arr, 0.0))))
-
-
 def _bis_making_higher_highs(bis: list) -> bool:
     """最近2根向上笔的高点是否在抬高（确认上涨方向）"""
     up_bis = [b for b in bis if hasattr(b, 'direction') and b.direction == "up"]
@@ -49,14 +40,12 @@ def _bis_making_lower_lows(bis: list) -> bool:
 
 class SignalDetector:
     """
-    三类买卖点判定（基于 MACD 面积的标准背驰检测）：
+    三类买卖点判定（成交量背驰法）：
 
-    一买(1st Buy): 下跌趋势背驰点
-      → 两个相邻向下段，价格创新低但MACD绿柱面积不创新低
-    二买(2nd Buy): 一买后回调低点（不破一买前低）
-    三买(3rd Buy): 突破中枢后回踩，不跌入中枢
-
-    一卖/二卖/三卖: 对称逻辑（上涨趋势）
+    一买: 下跌趋势背驰 → 价格创新低 + 后段量 < 前段 × 0.7
+    一卖: 上涨趋势背驰 → 价格创新高 + 后段量 < 前段 × 0.7
+    二买/二卖: 一买/一卖后的回踩/反弹确认
+    三买/三卖: 突破中枢后的回踩/反弹确认
     """
 
     def __init__(self, bis: list[Bi],
@@ -71,34 +60,6 @@ class SignalDetector:
         self._macd_df: Optional[pd.DataFrame] = None
         if klines_df is not None:
             self._macd_df = _calc_macd(klines_df.copy())
-
-    def _macd_area_for_entity(self, entity, seg_type: str) -> float:
-        """提取 entity 时间区间内的 MACD 同向柱面积"""
-        if self._macd_df is None:
-            return 0.0
-        mask = (
-            (self._macd_df['date'] >= entity.start)
-            & (self._macd_df['date'] <= entity.end)
-        )
-        subset = self._macd_df.loc[mask, 'bar']
-        if len(subset) == 0:
-            return 0.0
-        return _macd_area_directional(subset, seg_type)
-
-    def _dif_peak_for_entity(self, entity, seg_type: str) -> float:
-        """提取 entity 区间内 DIF 的极值（顶背驰取高点，底背驰取低点）"""
-        if self._macd_df is None:
-            return 0.0
-        mask = (
-            (self._macd_df['date'] >= entity.start)
-            & (self._macd_df['date'] <= entity.end)
-        )
-        subset = self._macd_df.loc[mask, 'dif']
-        if len(subset) == 0:
-            return 0.0
-        if seg_type == "top":
-            return float(subset.max())  # 顶背驰：DIF 高点
-        return float(subset.min())      # 底背驰：DIF 低点
 
     def _volume_for_entity(self, entity) -> float:
         """提取 entity 区间内的总成交量"""

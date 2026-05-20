@@ -307,7 +307,8 @@ export interface AISignal {
   holding_period: string
   description: string
   trend: string
-  divergence?: { type: string; probability: number; description: string } | null
+  divergence?: { type: string; probability: number; description: string; datetime?: string } | null
+  divergence_level?: string | null
   resonance?: { 共振: boolean; direction?: string; levels?: string[]; description: string }
   llm?: {
     model: string
