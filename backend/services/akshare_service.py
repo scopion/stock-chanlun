@@ -10,6 +10,7 @@ import urllib.parse
 from datetime import datetime, timedelta
 from typing import Optional
 from concurrent.futures import ThreadPoolExecutor, as_completed
+import random
 import httpx
 
 from utils import with_retry
@@ -308,36 +309,69 @@ def get_kline_hist(
     }
     limit = limit_map.get(period, 500)
 
-    # 60分钟数据使用新浪API
+    # 60分钟数据: 新浪 / mootdx 双源随机均分, 失败互为兜底
     if period in ("60",):
-        df = _get_minute_data_sina(sym, mkt, period, limit)
-        if not df.empty:
-            _cache_set(cache_key, df, ttl=60)
-        return df
+        sources = [
+            ("新浪", lambda: _get_minute_data_sina(sym, mkt, period, limit)),
+            ("mootdx", lambda: _get_60min_mootdx(sym, mkt, limit)),
+        ]
+        random.shuffle(sources)
+        for name, fetch in sources:
+            df = fetch()
+            if not df.empty and len(df) >= 20:
+                print(f"[60min] {code} 使用 {name}")
+                _cache_set(cache_key, df, ttl=60)
+                return df
+        print(f"[60min] {code} 所有数据源均失败")
+        return pd.DataFrame()
 
-    # 日/周/月数据使用腾讯API
-    period_map = {
-        "daily": "day",
-        "weekly": "week",
-        "monthly": "month",
-    }
-    period_qq = period_map.get(period, "day")
+    # 日/周/月数据: 腾讯 + mootdx 双源
+    if period in ("daily", "weekly", "monthly"):
+        period_map = {
+            "daily": "day",
+            "weekly": "week",
+            "monthly": "month",
+        }
+        period_qq = period_map.get(period, "day")
 
-    # 复权处理
-    if adjust == "qfq":
-        adjust_suffix = "qfq"
-    elif adjust == "hfq":
-        adjust_suffix = "hfq"
-    else:
-        adjust_suffix = ""
+        if adjust == "qfq":
+            adjust_suffix = "qfq"
+        elif adjust == "hfq":
+            adjust_suffix = "hfq"
+        else:
+            adjust_suffix = ""
 
+        sources = [
+            ("腾讯", lambda: _get_kline_tencent(
+                mkt, sym, period_qq, adjust_suffix, limit, code, period)),
+        ]
+        # mootdx 仅用于日线 (周线/月线腾讯已有)
+        if period == "daily":
+            sources.append(
+                ("mootdx", lambda: _get_kline_mootdx(sym, mkt, limit))
+            )
+        random.shuffle(sources)
+
+        for name, fetch in sources:
+            df = fetch()
+            if not df.empty and len(df) >= 20:
+                print(f"[{period}] {code} 使用 {name}")
+                _cache_set(cache_key, df, ttl=300)
+                return df
+        print(f"[{period}] {code} 所有数据源均失败")
+        return pd.DataFrame()
+
+
+def _get_kline_tencent(mkt: str, sym: str, period_qq: str,
+                        adjust_suffix: str, limit: int,
+                        code: str, period: str) -> pd.DataFrame:
+    """腾讯财经 K 线 API"""
     try:
         url = f"https://web.ifzq.gtimg.cn/appstock/app/fqkline/get?_var=kline_{period_qq}{adjust_suffix}&param={mkt}{sym},{period_qq},,,{limit},{adjust_suffix}"
         client = _get_client()
         resp = client.get(url)
         text = resp.text
 
-        # 解析返回数据: kline_dayqfq={...}
         json_match = re.search(r'=({.+})', text)
         if not json_match:
             return pd.DataFrame()
@@ -348,12 +382,10 @@ def get_kline_hist(
         if key not in data.get("data", {}):
             return pd.DataFrame()
 
-        # 获取数据 - 注意腾讯API返回的key格式可能是 "qfqweek" 而不是 "weekqfq"
         data_key = f"{period_qq}{adjust_suffix}" if adjust_suffix else period_qq
         klines = data["data"][key].get(data_key, [])
 
         if not klines:
-            # 尝试其他可能的key格式
             for k in [f"qfq{period_qq}", f"{period_qq}qfq", period_qq, "day", "qfqday", "hfqday", "dayhfq"]:
                 if k in data["data"][key]:
                     klines = data["data"][key][k]
@@ -380,11 +412,29 @@ def get_kline_hist(
         df = pd.DataFrame(records)
         if not df.empty:
             df['date'] = pd.to_datetime(df['date'])
-            # 分钟数据缓存 30 秒（盘中波动大）；日线缓存 5 分钟
-            _cache_set(cache_key, df, ttl=30 if period in ("60",) else 300)
         return df
     except Exception as e:
-        print(f"K线获取失败 {code} {period}: {e}")
+        print(f"腾讯K线获取失败 {code} {period}: {e}")
+        return pd.DataFrame()
+
+
+def _get_kline_mootdx(sym: str, mkt: str, limit: int = 500) -> pd.DataFrame:
+    """mootdx 日线 K 线 (category=4)"""
+    try:
+        from mootdx.quotes import Quotes
+        client = Quotes.factory(market='std')
+        mkt_int = 1 if mkt == "sh" else 0
+        bars = client.bars(symbol=sym, category=4, offset=limit)
+        if bars is None or len(bars) == 0:
+            return pd.DataFrame()
+
+        df = bars[['open', 'close', 'high', 'low', 'volume']].copy()
+        df['date'] = bars.index if hasattr(bars, 'index') else bars['datetime']
+        df['date'] = pd.to_datetime(df['date'])
+        df = df.reset_index(drop=True)
+        return df
+    except Exception as e:
+        print(f"mootdx 日线获取失败 {sym}: {e}")
         return pd.DataFrame()
 
 
@@ -1618,4 +1668,30 @@ def _get_minute_data_sina(code: str, market: str, period: str,
         return df
     except Exception as e:
         print(f"新浪分钟数据获取失败 {code} {period}: {e}")
+        return pd.DataFrame()
+
+
+# ─── mootdx 60分钟数据 ────────────────────────────────────────────────────────
+def _get_60min_mootdx(code: str, market: str, limit: int = 500) -> pd.DataFrame:
+    """
+    使用 mootdx (TCP 7709) 获取 60 分钟 K 线数据
+    market: "sh" -> 1, "sz" -> 0
+    mootdx 返回 DataFrame (columns: open/close/high/low/vol/datetime/volume)
+    """
+    try:
+        from mootdx.quotes import Quotes
+        client = Quotes.factory(market='std')
+        mkt_int = 1 if market == "sh" else 0
+        bars = client.bars(symbol=code, category=11, offset=limit)
+        if bars is None or len(bars) == 0:
+            return pd.DataFrame()
+
+        # mootdx 直接返回 DataFrame, 适配统一字段名
+        df = bars[['open', 'close', 'high', 'low', 'volume']].copy()
+        df['date'] = bars.index if hasattr(bars, 'index') else bars['datetime']
+        df['date'] = pd.to_datetime(df['date'])
+        df = df.reset_index(drop=True)
+        return df
+    except Exception as e:
+        print(f"mootdx 60分钟数据获取失败 {code}: {e}")
         return pd.DataFrame()
