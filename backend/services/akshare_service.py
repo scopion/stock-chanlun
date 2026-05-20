@@ -301,12 +301,19 @@ def get_kline_hist(
     sym, _ = normalize_stock_code(code)
     mkt = _get_qq_market_code(code)
 
+    # 各周期取数上限（K线根数）
+    limit_map = {
+        "5": 1500, "15": 1500, "30": 1500, "60": 1000,
+        "daily": 500, "weekly": 250, "monthly": 150,
+    }
+    limit = limit_map.get(period, 500)
+
     # 分钟数据使用新浪API
     minute_periods = ["5", "15", "30", "60"]
     if period in minute_periods:
-        df = _get_minute_data_sina(sym, mkt, period, adjust)
+        df = _get_minute_data_sina(sym, mkt, period, limit)
         if not df.empty:
-            _cache_set(cache_key, df, ttl=60)  # 分钟数据缓存60秒
+            _cache_set(cache_key, df, ttl=60)
         return df
 
     # 日/周/月数据使用腾讯API
@@ -324,9 +331,6 @@ def get_kline_hist(
         adjust_suffix = "hfq"
     else:
         adjust_suffix = ""
-
-    # 默认获取500条数据
-    limit = 500
 
     try:
         url = f"https://web.ifzq.gtimg.cn/appstock/app/fqkline/get?_var=kline_{period_qq}{adjust_suffix}&param={mkt}{sym},{period_qq},,,{limit},{adjust_suffix}"
@@ -1575,20 +1579,19 @@ def get_minute_data(code: str, period: str = "5") -> pd.DataFrame:
 
 
 # ─── 新浪分钟数据 ─────────────────────────────────────────────────────────────
-def _get_minute_data_sina(code: str, market: str, period: str, adjust: str = "qfq") -> pd.DataFrame:
+def _get_minute_data_sina(code: str, market: str, period: str,
+                          limit: int = 500, adjust: str = "qfq") -> pd.DataFrame:
     """
     使用新浪API获取分钟K线数据
     period: 5, 15, 30, 60 (分钟)
+    limit: 获取K线根数
     """
-    # 新浪代码格式: sz000001, sh600000
     sina_code = f"{market}{code}"
 
-    # 新浪API参数
     scale_map = {"5": 5, "15": 15, "30": 30, "60": 60}
     scale = scale_map.get(period, 30)
 
-    # 新浪API URL
-    url = f"https://money.finance.sina.com.cn/quotes_service/api/json_v2.php/CN_MarketData.getKLineData?symbol={sina_code}&scale={scale}&ma=no&datalen=500"
+    url = f"https://money.finance.sina.com.cn/quotes_service/api/json_v2.php/CN_MarketData.getKLineData?symbol={sina_code}&scale={scale}&ma=no&datalen={limit}"
 
     try:
         client = _get_client()
