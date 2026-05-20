@@ -26,7 +26,13 @@ class SegmentDetector:
 
     def detect_segments(self, max_iterations: int = 10000) -> list[XiangSegment]:
         """
-        检测线段: 每 3 笔构成一段, 尾部不足 3 笔也成段
+        检测线段（缠论标准特征序列破坏法）
+
+        线段终止条件（任一触发）:
+        1. 新笔与滑动窗口(最近4笔)不重叠 → 趋势耗尽
+        2. 反向笔破坏: 反向笔终点突破段起点 → 线段被破坏
+        3. 区间膨胀: 总区间 > 窗口区间 × 3 → 走势漂移
+        4. 安全上限 12 笔
         """
         if len(self.bis) == 0:
             return []
@@ -40,29 +46,82 @@ class SegmentDetector:
             if iterations > max_iterations:
                 break
 
-            # 取至多 3 笔
-            end = min(i + 3, len(self.bis))
-            seg_bis = self.bis[i:end]
-
-            rng_high = max(b.high for b in seg_bis)
-            rng_low = min(b.low for b in seg_bis)
-            up_n = sum(1 for b in seg_bis if b.direction == "up")
-            down_n = sum(1 for b in seg_bis if b.direction == "down")
-            seg_dir = "up" if up_n >= down_n else "down"
-
-            segments.append(XiangSegment(
-                id=f"xiang_{len(segments)+1}",
-                start=seg_bis[0].start,
-                end=seg_bis[-1].end,
-                direction=seg_dir,
-                high=rng_high,
-                low=rng_low,
-                bi_ids=[b.id for b in seg_bis],
-                level=2,
-            ))
-            i = end
+            seg, next_i = self._build_one_segment(i, len(segments) + 1)
+            segments.append(seg)
+            i = next_i
 
         return segments
+
+    def _build_one_segment(self, start_idx: int,
+                           seg_num: int) -> tuple[XiangSegment, int]:
+        """构建一条线段, 返回 (线段, 下一笔索引)"""
+        WINDOW = 4          # 滑动窗口(笔数)
+        RANGE_RATIO = 3.0   # 总区间/窗口区间上限
+        MAX_BI = 12         # 安全上限
+
+        first = self.bis[start_idx]
+        direction = first.direction
+        seg_high = first.high
+        seg_low = first.low
+        seg_start = first.start
+        seg_end = first.end
+        bi_indices = [start_idx]
+        start_low = first.low
+        start_high = first.high
+
+        j = start_idx + 1
+        while j < len(self.bis):
+            nxt = self.bis[j]
+
+            if len(bi_indices) >= MAX_BI:
+                break
+
+            # 滑动窗口区间
+            win_idx = bi_indices[-WINDOW:] if len(bi_indices) >= WINDOW else bi_indices
+            win_bis = [self.bis[k] for k in win_idx]
+            win_high = max(b.high for b in win_bis)
+            win_low = min(b.low for b in win_bis)
+
+            # 区间膨胀检查
+            total_range = seg_high - seg_low
+            win_range = max(win_high - win_low, 0.001)
+            if total_range > win_range * RANGE_RATIO:
+                break
+
+            if self._overlaps(nxt, win_high, win_low):
+                bi_indices.append(j)
+                seg_high = max(seg_high, nxt.high)
+                seg_low = min(seg_low, nxt.low)
+                seg_end = nxt.end
+                j += 1
+            else:
+                # 不重叠 → 检查反向破坏
+                destroyed = False
+                if direction == "up" and nxt.low < start_low:
+                    destroyed = True
+                elif direction == "down" and nxt.high > start_high:
+                    destroyed = True
+
+                if destroyed:
+                    bi_indices.append(j)
+                    seg_high = max(seg_high, nxt.high)
+                    seg_low = min(seg_low, nxt.low)
+                    seg_end = nxt.end
+                    j += 1
+                break
+
+        seg_bis = [self.bis[k] for k in bi_indices]
+        seg = XiangSegment(
+            id=f"xiang_{seg_num}",
+            start=seg_bis[0].start,
+            end=seg_bis[-1].end,
+            direction=direction,
+            high=seg_high,
+            low=seg_low,
+            bi_ids=[b.id for b in seg_bis],
+            level=2,
+        )
+        return seg, j
 
     def _has_overlap(self, bis_group: list[Bi]) -> bool:
         """判断一组笔是否有重叠"""

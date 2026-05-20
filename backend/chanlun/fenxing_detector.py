@@ -81,11 +81,11 @@ class FenxingDetector:
                         "volume": prev.get("volume", 0) + cur.get("volume", 0),
                     }
                 else:
-                    # 向下趋势 → 取低低
+                    # 向下趋势 → 取低低（高低点都取较低者）
                     result[-1] = {
                         "date": new_date,
                         "open": prev["open"],
-                        "high": max(prev["high"], cur["high"]),
+                        "high": min(prev["high"], cur["high"]),
                         "low": min(prev["low"], cur["low"]),
                         "close": cur["close"],
                         "volume": prev.get("volume", 0) + cur.get("volume", 0),
