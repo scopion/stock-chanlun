@@ -381,7 +381,7 @@ def get_kline_hist(
         if not df.empty:
             df['date'] = pd.to_datetime(df['date'])
             # 分钟数据缓存 30 秒（盘中波动大）；日线缓存 5 分钟
-            _cache_set(cache_key, df, ttl=30 if period in minute_periods else 300)
+            _cache_set(cache_key, df, ttl=30 if period in ("60",) else 300)
         return df
     except Exception as e:
         print(f"K线获取失败 {code} {period}: {e}")
