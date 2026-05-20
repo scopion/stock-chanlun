@@ -165,10 +165,8 @@ class SegmentDetector:
 
                 while extend_idx < len(segments):
                     nxt = segments[extend_idx]
-                    # 新段与当前中枢重叠 → 并入
+                    # 新段与中枢区间重叠 → 并入(不扩大范围)
                     if nxt.high > range_low and nxt.low < range_high:
-                        range_high = max(range_high, nxt.high)
-                        range_low = min(range_low, nxt.low)
                         cur_end = nxt.end
                         xiang_ids.append(nxt.id)
                         extend_idx += 1
