@@ -58,6 +58,9 @@
           <span class="sort-col" :class="{ active: sortKey === 'change_pct' }" @click="setSort('change_pct')">
             涨跌幅 <span class="sort-icon">{{ sortIcon('change_pct') }}</span>
           </span>
+          <span class="sort-col signal-col">
+            缠论(60)
+          </span>
           <span class="sort-col" :class="{ active: sortKey === 'added_at' }" @click="setSort('added_at')">
             自选时间 <span class="sort-icon">{{ sortIcon('added_at') }}</span>
           </span>
@@ -75,6 +78,10 @@
           <span class="mono" :class="stock.change_pct > 0 ? 'price-up' : 'price-down'">
             {{ stock.change_pct > 0 ? '+' : '' }}{{ stock.change_pct?.toFixed(2) || 0 }}%
           </span>
+          <span v-if="stock.signal_60" class="signal-cell" :class="stock.signal_60.type.includes('买') ? 'sig-buy' : 'sig-sell'">
+            {{ stock.signal_60.type }} {{ stock.signal_60.datetime?.slice(5) }}
+          </span>
+          <span v-else class="signal-cell signal-none">—</span>
           <span class="added-time">{{ formatAddedTime(stock.added_at) }}</span>
           <button class="remove-btn" @click.stop="removeStock(stock.code)">
             <svg width="14" height="14" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2">
@@ -307,4 +314,9 @@ onUnmounted(() => {
   font-size: 0.78rem;
   color: var(--text-muted);
 }
+.signal-col { font-size: 0.75rem; font-weight: 700; color: var(--accent-blue); }
+.signal-cell { font-size: 0.72rem; font-weight: 600; white-space: nowrap; }
+.signal-cell.sig-buy { color: var(--accent-green); }
+.signal-cell.sig-sell { color: var(--accent-red); }
+.signal-none { color: var(--text-muted); }
 </style>
