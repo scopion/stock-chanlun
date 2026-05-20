@@ -12,10 +12,6 @@ from utils import chanlun_cache
 
 def level_to_period(level: str) -> str:
     mapping = {
-        "1min": "5",
-        "5min": "5",
-        "15min": "15",
-        "30min": "30",
         "60min": "60",
         "daily": "daily",
         "weekly": "weekly",
@@ -36,7 +32,7 @@ def run_analysis(code: str, level: str, kline_limit: int = 500) -> ChanlunAnalys
     if df.empty or len(df) < 20:
         raise HTTPException(
             status_code=404,
-            detail=f"{code} {level}级别K线数据不足（仅{len(df) if not df.empty else 0}根），请换日线/30分钟级别尝试",
+            detail=f"{code} {level}级别K线数据不足（仅{len(df) if not df.empty else 0}根），请换日线/60分钟级别尝试",
         )
 
     if len(df) > kline_limit:
@@ -62,7 +58,7 @@ def get_kline_df_for_ai(
     if df.empty or len(df) < 20:
         raise HTTPException(
             status_code=404,
-            detail=f"{code} {level}级别K线数据不足（仅{len(df) if not df.empty else 0}根），请换日线/30分钟级别尝试",
+            detail=f"{code} {level}级别K线数据不足（仅{len(df) if not df.empty else 0}根），请换日线/60分钟级别尝试",
         )
 
     if len(df) > kline_limit:

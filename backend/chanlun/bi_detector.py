@@ -111,27 +111,26 @@ class BiDetector:
             amp = (gap_high - gap_low) / gap_low
 
             if amp >= self.GAP_AMP_THRESHOLD:
-                # 按价格方向决定笔方向
-                if gap_high - gap_low >= 0:
-                    # 向上
-                    filled.append(Bi(
-                        id=f"bi_up_gap_{len(filled)+1}",
-                        start=prev.end, end=curr.start,
-                        direction="up",
-                        high=gap_high, low=gap_low,
-                        start_price=gap_low,
-                        end_price=gap_high,
-                    ))
+                # 用空白段首尾K线实际价格，按时序方向决定笔方向
+                start_px = float(gap_df.iloc[0]['close'])
+                end_px = float(gap_df.iloc[-1]['close'])
+                if end_px >= start_px:
+                    direction = "up"
+                    start_price = start_px
+                    end_price = end_px
                 else:
-                    # 向下
-                    filled.append(Bi(
-                        id=f"bi_down_gap_{len(filled)+1}",
-                        start=prev.end, end=curr.start,
-                        direction="down",
-                        high=gap_high, low=gap_low,
-                        start_price=gap_high,
-                        end_price=gap_low,
-                    ))
+                    direction = "down"
+                    start_price = start_px
+                    end_price = end_px
+
+                filled.append(Bi(
+                    id="bi_%s_gap_%d" % (direction, len(filled) + 1),
+                    start=prev.end, end=curr.start,
+                    direction=direction,
+                    high=gap_high, low=gap_low,
+                    start_price=start_price,
+                    end_price=end_price,
+                ))
 
             filled.append(curr)
 

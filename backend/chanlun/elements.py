@@ -67,7 +67,7 @@ class PowerMetrics(BaseModel):
 class BuySellPoint(BaseModel):
     """买卖点"""
     type: Literal["一买", "二买", "三买", "一卖", "二卖", "三卖", "盘整背驰买", "盘整背驰卖"]
-    level: str            # 如 "30min", "daily"
+    level: str            # 如 "60min", "daily"
     price: float
     datetime: datetime
     confidence: float = Field(ge=0.0, le=1.0)  # 置信度 0-1

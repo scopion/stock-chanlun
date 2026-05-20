@@ -27,7 +27,7 @@ async def analyze_chanlun(
     code: str,
     level: str = Query(
         "daily",
-        pattern="^(1min|5min|15min|30min|60min|daily|weekly|monthly)$",
+        pattern="^(60min|daily|weekly|monthly)$",
     ),
 ):
     check_chanlun_rate_limits(client_ip(request))
@@ -101,8 +101,8 @@ async def chanlun_multi_level(
     request: Request,
     code: str,
     levels: str = Query(
-        "daily,weekly,30min",
-        description="逗号分隔的分析级别，如 daily,weekly,30min",
+        "daily,weekly",
+        description="逗号分隔的分析级别，如 daily,weekly,60min",
     ),
 ):
     check_chanlun_rate_limits(client_ip(request))
@@ -230,20 +230,6 @@ async def _ai_signal_impl(code: str, level: str, model: str) -> dict:
     signal.stock_code = code
 
     resonance = None
-    if level == "30min":
-        try:
-            daily_df = get_kline_hist(code, period="daily", adjust="qfq")
-            if not daily_df.empty:
-                daily_result = ChanlunEngine(daily_df).analyze(level="daily")
-                classifier = WaveClassifier()
-                resonance = classifier.multi_level_resonance(
-                    [
-                        {"trend": trend, "level": level},
-                        {"trend": daily_result.trend, "level": "daily"},
-                    ]
-                )
-        except Exception:
-            pass
 
     llm_result = None
     llm_error = None

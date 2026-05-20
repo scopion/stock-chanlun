@@ -89,7 +89,6 @@
             <div class="kbd-list">
               <div class="kbd-item"><kbd>/</kbd><span>聚焦搜索框</span></div>
               <div class="kbd-item"><kbd>R</kbd><span>刷新当前页面</span></div>
-              <div class="kbd-item"><kbd>1/5</kbd><span>切换 1分钟 / 5分钟</span></div>
               <div class="kbd-item"><kbd>D</kbd><span>切换日线</span></div>
               <div class="kbd-item"><kbd>W</kbd><span>切换周线</span></div>
               <div class="kbd-item"><kbd>M</kbd><span>切换月线</span></div>

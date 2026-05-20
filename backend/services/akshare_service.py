@@ -303,14 +303,13 @@ def get_kline_hist(
 
     # 各周期取数上限（K线根数）
     limit_map = {
-        "5": 1500, "15": 1500, "30": 1500, "60": 1000,
+        "60": 1000,
         "daily": 500, "weekly": 250, "monthly": 150,
     }
     limit = limit_map.get(period, 500)
 
-    # 分钟数据使用新浪API
-    minute_periods = ["5", "15", "30", "60"]
-    if period in minute_periods:
+    # 60分钟数据使用新浪API
+    if period in ("60",):
         df = _get_minute_data_sina(sym, mkt, period, limit)
         if not df.empty:
             _cache_set(cache_key, df, ttl=60)

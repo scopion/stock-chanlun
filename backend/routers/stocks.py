@@ -72,7 +72,7 @@ async def screen_stocks_api(
     dual_cross: bool = Query(False, description="是否必须 MACD+SKDJ 双金叉共振"),
     level: str = Query(
         "daily",
-        pattern="^(1min|5min|15min|30min|60min|daily|weekly|monthly)$",
+        pattern="^(60min|daily|weekly|monthly)$",
     ),
     pool_size: int = Query(100, ge=10, le=1000, description="候选池大小（最高 1000）"),
 ):
@@ -116,7 +116,7 @@ def screen_stocks_stream_api(
     dual_cross: bool = Query(False, description="是否必须 MACD+SKDJ 双金叉共振"),
     level: str = Query(
         "daily",
-        pattern="^(1min|5min|15min|30min|60min|daily|weekly|monthly)$",
+        pattern="^(60min|daily|weekly|monthly)$",
     ),
     pool_size: int = Query(100, ge=10, le=1000, description="候选池大小（最高 1000）"),
     max_results: int = Query(50, ge=1, le=200, description="最多返回条数"),
@@ -301,7 +301,7 @@ async def stock_kline(
     request: Request,
     level: str = Query(
         "daily",
-        pattern="^(1min|5min|15min|30min|60min|daily|weekly|monthly)$",
+        pattern="^(60min|daily|weekly|monthly)$",
     ),
     limit: int = Query(500, le=2000),
     start_date: Optional[str] = Query(None, description="开始日期 YYYY-MM-DD"),
@@ -347,7 +347,7 @@ async def export_stock_csv(
     request: Request,
     level: str = Query(
         "daily",
-        pattern="^(1min|5min|15min|30min|60min|daily|weekly|monthly)$",
+        pattern="^(60min|daily|weekly|monthly)$",
     ),
     limit: int = Query(500, le=2000),
 ):

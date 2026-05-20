@@ -177,10 +177,6 @@ class StrategyEngine:
     def _calc_holding_period(self) -> str:
         """操作窗口"""
         level_periods = {
-            "1min": "30分钟内",
-            "5min": "2-4小时",
-            "15min": "半天-1天",
-            "30min": "1-3天",
             "60min": "3-7天",
             "daily": "1-4周",
             "weekly": "1-3个月",

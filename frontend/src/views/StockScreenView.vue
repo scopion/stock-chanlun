@@ -276,7 +276,6 @@ const signalOptions = [
 const levelOptions = [
   { label: '日线', value: 'daily' },
   { label: '周线', value: 'weekly' },
-  { label: '30分', value: '30min' },
   { label: '60分', value: '60min' },
 ]
 

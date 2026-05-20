@@ -2,7 +2,7 @@ import { defineStore } from 'pinia'
 import { ref, watch } from 'vue'
 import { stockApi, type KLine, type ChanlunResult, type AISignal } from '../api/stock'
 
-export type LevelOption = '1min' | '5min' | '15min' | '30min' | '60min' | 'daily' | 'weekly' | 'monthly'
+export type LevelOption = '60min' | 'daily' | 'weekly' | 'monthly'
 
 /** 指标显示配置 */
 export interface IndicatorConfig {

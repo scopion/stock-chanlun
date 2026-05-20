@@ -149,9 +149,8 @@ def _analyze_stock(code: str, level: str) -> dict | None:
     """
     try:
         period_map = {
-            "1min": "1", "5min": "5", "15min": "15",
-            "30min": "30", "60min": "60",
-            "daily": "day", "weekly": "week", "monthly": "month",
+            "60min": "60",
+            "daily": "daily", "weekly": "weekly", "monthly": "monthly",
         }
         period = period_map.get(level, "day")
         df = get_kline_hist(code, period=period, adjust="qfq")
