@@ -18,16 +18,16 @@ class FormatDivergencePromptTests(unittest.TestCase):
         div = {
             "type": "bottom",
             "probability": 0.82,
-            "macd_ratio": 0.72,
-            "macd_force": "directional",
+            "vol_ratio": 0.72,
+            "vol_force": "volume",
             "rsi_confirm": True,
             "kdj_confirm": False,
             "description": "价格新低0.5但力度减弱至72%",
             "price_drop": 0.012,
         }
         text = _format_divergence_for_prompt(div)
-        self.assertIn("同向柱累计", text)
-        self.assertIn("MACD力度比:0.72", text)
+        self.assertIn("成交量背驰法", text)
+        self.assertIn("量比:0.72", text)
         self.assertIn("RSI是", text)
         self.assertIn("KDJ否", text)
         self.assertIn("价格下探幅度", text)
@@ -36,8 +36,8 @@ class FormatDivergencePromptTests(unittest.TestCase):
         div = {
             "type": "top",
             "probability": 0.71,
-            "macd_ratio": 0.8,
-            "macd_force": "abs",
+            "vol_ratio": 0.8,
+            "vol_force": "volume",
             "rsi_confirm": False,
             "kdj_confirm": False,
             "description": "测试",
@@ -62,7 +62,7 @@ class FormatDivergencePromptTests(unittest.TestCase):
             zhongshus=[],
             bis=[],
         )
-        self.assertIn("绝对值面积", prompt)
+        self.assertIn("成交量背驰法", prompt)
         self.assertIn("背驰信号", prompt)
 
 

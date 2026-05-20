@@ -8,14 +8,11 @@ from typing import Optional
 from chanlun.elements import Bi
 
 
-# MACD：后一段面积低于前一段该比例以下视为力度显著减弱
-MACD_WEAKEN_RATIO = 0.85
-MACD_AREA_EPS = 1e-15
+# 成交量背驰: 后段总量 < 前段总量 × 0.7 确认背驰
+VOL_DIVERGENCE_RATIO = 0.70
 PRICE_EPS = 1e-12
 MIN_BIS_FOR_DIV = 4
-# 每段至少若干根 K 线才参与力度对比，避免单子线噪声
 MIN_BARS_PER_SEGMENT = 2
-# MACD 已满足背驰时，RSI 或 KDJ(J) 同向背离各小幅抬高概率上限
 OSC_CONFIRM_BOOST = 0.07
 
 
@@ -184,7 +181,7 @@ class DivergenceDetector:
     def _check_segment_divergence(
         self, seg1: Bi, seg2: Bi, seg_type: str
     ) -> Optional[dict]:
-        """比较两段的力度差异"""
+        """成交量背驰法: 价格创新高/低 + 量缩至前段70%以下"""
         s1_df = self._get_segment_df(seg1.start, seg1.end)
         s2_df = self._get_segment_df(seg2.start, seg2.end)
 
@@ -194,26 +191,13 @@ class DivergenceDetector:
         ):
             return None
 
-        d1 = macd_area_directional(s1_df["bar"], seg_type)
-        d2 = macd_area_directional(s2_df["bar"], seg_type)
-        if d1 > MACD_AREA_EPS and d2 > MACD_AREA_EPS:
-            macd1, macd2 = d1, d2
-            macd_force_kind = "directional"
-        else:
-            macd1 = macd_area(s1_df["bar"])
-            macd2 = macd_area(s2_df["bar"])
-            macd_force_kind = "abs"
-        if macd1 <= MACD_AREA_EPS:
-            return None
-
-        threshold = macd1 * MACD_WEAKEN_RATIO
-
+        # 价格条件
         if seg_type == "bottom":
             price1 = float(seg1.low)
             price2 = float(seg2.low)
             if price1 <= PRICE_EPS:
                 return None
-            if not (price2 < price1 and macd2 < threshold):
+            if not (price2 < price1):
                 return None
             change_key = "price_drop"
             desc_prefix = "价格新低"
@@ -222,13 +206,21 @@ class DivergenceDetector:
             price2 = float(seg2.high)
             if price1 <= PRICE_EPS:
                 return None
-            if not (price2 > price1 and macd2 < threshold):
+            if not (price2 > price1):
                 return None
             change_key = "price_rise"
             desc_prefix = "价格新高"
 
-        ratio = macd2 / macd1
-        prob = min(1.0, (1 - ratio) + 0.5)
+        # 成交量条件: 后段 < 前段 × 0.7
+        vol1 = float(s1_df["volume"].sum()) if "volume" in s1_df.columns else 0.0
+        vol2 = float(s2_df["volume"].sum()) if "volume" in s2_df.columns else 0.0
+        if vol1 <= 0 or vol2 <= 0:
+            return None
+        if vol2 >= vol1 * VOL_DIVERGENCE_RATIO:
+            return None
+
+        vol_ratio = vol2 / vol1
+        prob = min(1.0, (1 - vol_ratio) * 2 + 0.4)
 
         rsi_ok = self._rsi_confirms(seg_type, s1_df, s2_df)
         kdj_ok = self._kdj_j_confirms(seg_type, s1_df, s2_df)
@@ -251,12 +243,12 @@ class DivergenceDetector:
             "type": seg_type,
             "probability": round(prob, 2),
             change_key: pct_move,
-            "macd_ratio": round(ratio, 2),
-            "macd_force": macd_force_kind,
+            "vol_ratio": round(vol_ratio, 2),
+            "vol_force": "volume",
             "rsi_confirm": rsi_ok,
             "kdj_confirm": kdj_ok,
             "description": (
-                f"{desc_prefix}{money(delta):.2f}但力度减弱至{ratio:.0%}{extra_txt}"
+                f"{desc_prefix}{money(delta):.2f}但量缩至{vol_ratio:.0%}{extra_txt}"
             ),
         }
 

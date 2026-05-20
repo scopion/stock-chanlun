@@ -8,10 +8,9 @@ from typing import Optional
 
 def _format_divergence_for_prompt(divergence: dict) -> str:
     """将背驰检测结果格式化为模型可读的多行文本"""
-    force = divergence.get("macd_force")
+    force = divergence.get("vol_force")
     force_cn = {
-        "directional": "同向柱累计",
-        "abs": "绝对值面积(震荡回退)",
+        "volume": "成交量背驰法",
     }.get(str(force), str(force) if force is not None else "未知")
 
     def _yn(val: object) -> str:
@@ -28,7 +27,7 @@ def _format_divergence_for_prompt(divergence: dict) -> str:
 
     lines = [
         f"  类型:{divergence.get('type')} 概率:{divergence.get('probability')} "
-        f"MACD力度比:{divergence.get('macd_ratio')} 力度算法:{force_cn}",
+        f"量比:{divergence.get('vol_ratio')} 力度算法:{force_cn}",
         f"  振荡器背离确认:{osc}",
         f"  描述:{divergence.get('description', '')}",
     ]

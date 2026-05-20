@@ -7,9 +7,8 @@ from typing import Optional, Literal
 from datetime import datetime
 from .elements import Bi, XiangSegment, Zhongshu, BuySellPoint, SupportResistanceLevel
 
-# MACD 相关常量（与 divergence.py 保持一致）
-_MACD_WEAKEN_RATIO = 0.85
-_MACD_AREA_EPS = 1e-15
+# 成交量背驰阈值: 后段总量 < 前段总量 × 0.7 确认背驰
+_VOL_DIVERGENCE_RATIO = 0.70
 
 
 def _calc_macd(df: pd.DataFrame, fast: int = 12, slow: int = 26,
@@ -86,6 +85,34 @@ class SignalDetector:
             return 0.0
         return _macd_area_directional(subset, seg_type)
 
+    def _dif_peak_for_entity(self, entity, seg_type: str) -> float:
+        """提取 entity 区间内 DIF 的极值（顶背驰取高点，底背驰取低点）"""
+        if self._macd_df is None:
+            return 0.0
+        mask = (
+            (self._macd_df['date'] >= entity.start)
+            & (self._macd_df['date'] <= entity.end)
+        )
+        subset = self._macd_df.loc[mask, 'dif']
+        if len(subset) == 0:
+            return 0.0
+        if seg_type == "top":
+            return float(subset.max())  # 顶背驰：DIF 高点
+        return float(subset.min())      # 底背驰：DIF 低点
+
+    def _volume_for_entity(self, entity) -> float:
+        """提取 entity 区间内的总成交量"""
+        if self._macd_df is None:
+            return 0.0
+        mask = (
+            (self._macd_df['date'] >= entity.start)
+            & (self._macd_df['date'] <= entity.end)
+        )
+        subset = self._macd_df.loc[mask, 'volume'] if 'volume' in self._macd_df.columns else None
+        if subset is None or len(subset) == 0:
+            return 0.0
+        return float(subset.sum())
+
     def detect_all(self) -> list[BuySellPoint]:
         """检测所有买卖点（含盘整背驰）"""
         signals = []
@@ -104,19 +131,14 @@ class SignalDetector:
 
     def _detect_1st_buy(self) -> list[BuySellPoint]:
         """
-        一买: 下跌趋势的MACD背驰点
+        一买: 成交量背驰法
 
-        标准缠论条件:
-        - 至少2个同向（向下）段/笔
-        - 后一段价格创新低 (curr.low < prev.low)
-        - 后一段 MACD 绿柱面积 < 前一段 × 85%（力度背驰）
-
-        只返回最近的背驰点（一日一买只有一个真正的背驰终点），
-        避免历史信号堆积干扰判断。
+        条件:
+        1. 价格: 后一段创新低 (curr.low < prev.low)
+        2. 成交量: 后一段总量 < 前一段总量 × 70%（资金推动力度衰竭）
         """
         candidates: list[tuple[int, BuySellPoint]] = []
 
-        # 先用线段判断，线段不足时用笔
         down_segments = [s for s in self.segments if s.direction == "down"]
         if len(down_segments) < 2:
             down_bis = [b for b in self.bis if b.direction == "down"]
@@ -133,28 +155,15 @@ class SignalDetector:
             if curr.low >= prev.low:
                 continue
 
-            macd_pre_ok = False
-            force_ratio = 1.0
-
-            if self._macd_df is not None:
-                macd_prev = self._macd_area_for_entity(prev, "bottom")
-                macd_curr = self._macd_area_for_entity(curr, "bottom")
-                if macd_prev > _MACD_AREA_EPS and macd_curr > _MACD_AREA_EPS:
-                    force_ratio = macd_curr / macd_prev
-                    if macd_curr < macd_prev * _MACD_WEAKEN_RATIO:
-                        macd_pre_ok = True
-
-            if not macd_pre_ok and self._macd_df is not None:
+            vol_prev = self._volume_for_entity(prev)
+            vol_curr = self._volume_for_entity(curr)
+            if vol_prev <= 0 or vol_curr <= 0:
+                continue
+            if vol_curr >= vol_prev * _VOL_DIVERGENCE_RATIO:
                 continue
 
-            if self._macd_df is None:
-                prev_power = (prev.high - prev.low) / max(1, (prev.end - prev.start).total_seconds())
-                curr_power = (curr.high - curr.low) / max(1, (curr.end - curr.start).total_seconds())
-                if curr_power >= prev_power * 0.8:
-                    continue
-                force_ratio = curr_power / max(prev_power, 1e-12)
-
-            prob = round(min(1.0, abs(1 - force_ratio) + 0.5), 2)
+            vol_ratio = vol_curr / vol_prev
+            prob = round(min(1.0, (1 - vol_ratio) * 2 + 0.4), 2)
             candidates.append((i, BuySellPoint(
                 type="一买",
                 level=self.level,
@@ -162,10 +171,9 @@ class SignalDetector:
                 datetime=curr.end,
                 confidence=prob,
                 stop_loss=float(curr.low * 0.97),
-                description=f"背驰一买: 价格{curr.low:.2f}新低，MACD力度{force_ratio:.0%}<85%"
+                description=f"背驰一买: 价格{curr.low:.2f}新低，量缩至{vol_ratio:.0%}"
             )))
 
-        # 只保留最后一条（最近的背驰点）
         if candidates:
             return [candidates[-1][1]]
         return []
@@ -244,9 +252,11 @@ class SignalDetector:
 
     def _detect_1st_sell(self) -> list[BuySellPoint]:
         """
-        一卖: 上涨趋势的MACD背驰点
-        条件: 价格创新高但MACD红柱面积缩小
-        只返回最近一个背驰点。
+        一卖: 成交量背驰法
+
+        条件:
+        1. 价格: 后一段创新高 (curr.high > prev.high)
+        2. 成交量: 后一段总量 < 前一段总量 × 70%（资金推动力度衰竭）
         """
         candidates: list[tuple[int, BuySellPoint]] = []
 
@@ -266,28 +276,15 @@ class SignalDetector:
             if curr.high <= prev.high:
                 continue
 
-            macd_pre_ok = False
-            force_ratio = 1.0
-
-            if self._macd_df is not None:
-                macd_prev = self._macd_area_for_entity(prev, "top")
-                macd_curr = self._macd_area_for_entity(curr, "top")
-                if macd_prev > _MACD_AREA_EPS and macd_curr > _MACD_AREA_EPS:
-                    force_ratio = macd_curr / macd_prev
-                    if macd_curr < macd_prev * _MACD_WEAKEN_RATIO:
-                        macd_pre_ok = True
-
-            if not macd_pre_ok and self._macd_df is not None:
+            vol_prev = self._volume_for_entity(prev)
+            vol_curr = self._volume_for_entity(curr)
+            if vol_prev <= 0 or vol_curr <= 0:
+                continue
+            if vol_curr >= vol_prev * _VOL_DIVERGENCE_RATIO:
                 continue
 
-            if self._macd_df is None:
-                prev_power = (prev.high - prev.low) / max(1, (prev.end - prev.start).total_seconds())
-                curr_power = (curr.high - curr.low) / max(1, (curr.end - curr.start).total_seconds())
-                if curr_power >= prev_power * 0.8:
-                    continue
-                force_ratio = curr_power / max(prev_power, 1e-12)
-
-            prob = round(min(1.0, abs(1 - force_ratio) + 0.5), 2)
+            vol_ratio = vol_curr / vol_prev
+            prob = round(min(1.0, (1 - vol_ratio) * 2 + 0.4), 2)
             candidates.append((i, BuySellPoint(
                 type="一卖",
                 level=self.level,
@@ -295,7 +292,7 @@ class SignalDetector:
                 datetime=curr.end,
                 confidence=prob,
                 stop_loss=float(curr.high * 1.03),
-                description=f"背驰一卖: 价格{curr.high:.2f}新高，MACD力度{force_ratio:.0%}<85%"
+                description=f"背驰一卖: 价格{curr.high:.2f}新高，量缩至{vol_ratio:.0%}"
             )))
 
         if candidates:
@@ -372,14 +369,10 @@ class SignalDetector:
 
     def _detect_consolidation_divergence(self) -> list[BuySellPoint]:
         """
-        盘整背驰：中枢内的背驰检测
+        盘整背驰(成交量法): 中枢内反复试探边界时量缩确认衰竭
 
-        标准缠论中，价格在中枢内反复试探边界时，若
-        后一次试探比前一次力度更弱（MACD面积缩小），
-        则构成盘整背驰，预示中枢即将被突破或反转。
-
-        顶盘整背驰（卖点）：中枢内向上段推高但 MACD 红柱递减
-        底盘整背驰（买点）：中枢内向下段探低但 MACD 绿柱递减
+        顶盘整背驰(卖): 中枢内向上段推高但成交量递减
+        底盘整背驰(买): 中枢内向下段探低但成交量递减
         """
         signals: list[BuySellPoint] = []
         if len(self.zhongshus) == 0 or len(self.segments) < 2:
@@ -387,7 +380,7 @@ class SignalDetector:
 
         last_zs = self.zhongshus[-1]
 
-        # 取中枢范围内的向上段（触及上沿 95% 以内视为试探上沿）
+        # 顶盘整背驰
         up_in_zs = [
             s for s in self.segments
             if s.direction == "up"
@@ -399,24 +392,25 @@ class SignalDetector:
             curr = up_in_zs[i]
             if curr.high <= prev.high:
                 continue
-            if self._macd_df is None:
+            vol_prev = self._volume_for_entity(prev)
+            vol_curr = self._volume_for_entity(curr)
+            if vol_prev <= 0 or vol_curr <= 0:
                 continue
-            macd_prev = self._macd_area_for_entity(prev, "top")
-            macd_curr = self._macd_area_for_entity(curr, "top")
-            if macd_prev > _MACD_AREA_EPS and macd_curr < macd_prev * _MACD_WEAKEN_RATIO:
-                ratio = macd_curr / macd_prev
-                prob = round(min(1.0, abs(1 - ratio) + 0.4), 2)
-                signals.append(BuySellPoint(
-                    type="一卖",
-                    level=self.level,
-                    price=float(curr.high),
-                    datetime=curr.end,
-                    confidence=prob,
-                    stop_loss=float(curr.high * 1.03),
-                    description=f"盘整背驰卖: 中枢内{curr.high:.2f}新高但MACD力度{ratio:.0%}<85%"
-                ))
+            if vol_curr >= vol_prev * _VOL_DIVERGENCE_RATIO:
+                continue
+            vol_ratio = vol_curr / vol_prev
+            prob = round(min(1.0, (1 - vol_ratio) * 2 + 0.3), 2)
+            signals.append(BuySellPoint(
+                type="一卖",
+                level=self.level,
+                price=float(curr.high),
+                datetime=curr.end,
+                confidence=prob,
+                stop_loss=float(curr.high * 1.03),
+                description=f"盘整背驰卖: 中枢内{curr.high:.2f}新高量缩至{vol_ratio:.0%}"
+            ))
 
-        # 取中枢范围内的向下段（触及下沿 105% 以内视为试探下沿）
+        # 底盘整背驰
         down_in_zs = [
             s for s in self.segments
             if s.direction == "down"
@@ -428,24 +422,24 @@ class SignalDetector:
             curr = down_in_zs[i]
             if curr.low >= prev.low:
                 continue
-            if self._macd_df is None:
+            vol_prev = self._volume_for_entity(prev)
+            vol_curr = self._volume_for_entity(curr)
+            if vol_prev <= 0 or vol_curr <= 0:
                 continue
-            macd_prev = self._macd_area_for_entity(prev, "bottom")
-            macd_curr = self._macd_area_for_entity(curr, "bottom")
-            if macd_prev > _MACD_AREA_EPS and macd_curr < macd_prev * _MACD_WEAKEN_RATIO:
-                ratio = macd_curr / macd_prev
-                prob = round(min(1.0, abs(1 - ratio) + 0.4), 2)
-                signals.append(BuySellPoint(
-                    type="一买",
-                    level=self.level,
-                    price=float(curr.low),
-                    datetime=curr.end,
-                    confidence=prob,
-                    stop_loss=float(curr.low * 0.97),
-                    description=f"盘整背驰买: 中枢内{curr.low:.2f}新低但MACD力度{ratio:.0%}<85%"
-                ))
+            if vol_curr >= vol_prev * _VOL_DIVERGENCE_RATIO:
+                continue
+            vol_ratio = vol_curr / vol_prev
+            prob = round(min(1.0, (1 - vol_ratio) * 2 + 0.3), 2)
+            signals.append(BuySellPoint(
+                type="一买",
+                level=self.level,
+                price=float(curr.low),
+                datetime=curr.end,
+                confidence=prob,
+                stop_loss=float(curr.low * 0.97),
+                description=f"盘整背驰买: 中枢内{curr.low:.2f}新低量缩至{vol_ratio:.0%}"
+            ))
 
-        # 盘整背驰只保留最近一组（买卖各一个）
         buy_signals = [s for s in signals if s.type == "一买"]
         sell_signals = [s for s in signals if s.type == "一卖"]
         result: list[BuySellPoint] = []
@@ -457,147 +451,60 @@ class SignalDetector:
 
     def detect_trend(self, current_price: float | None = None) -> str:
         """
-        统一趋势判断（被缠论分析和 AI 策略共用）
+        走势类型判断（严格缠论定义）:
 
-        判断优先级：
-        1. 多中枢：中枢重心方向 + 中枢间隙方向
-        2. 单中枢：价格位置 + 线段方向
-        3. 无中枢：价格创新高/新低 + 线段方向
-
-        关键改进：中枢重心代替边沿严格单调（允许中枢扩展中的波动），
-        中枢间隙取多数方向（代替纯线段计数）。
+        上涨趋势: >=2 个中枢, 不重叠, 后一个在上方
+        下跌趋势: >=2 个中枢, 不重叠, 后一个在下方
+        盘整:     <=1 个中枢, 或>=2 个但全部重叠
+        未知:     无中枢且笔不足
         """
         if not self.segments:
             return "未知"
 
-        # ── 1. 多中枢 ──────────────────────────────────────────
+        # ── 多中枢: 检查不重叠的中枢方向 ──
         if len(self.zhongshus) >= 2:
-            # 中枢重心（更稳定，不易受单根K线波动影响）
-            centers = [(zs.range_high + zs.range_low) / 2
-                       for zs in self.zhongshus]
-
-            # 重心严格递增 → 上涨趋势
-            if all(centers[i] < centers[i + 1]
-                   for i in range(len(centers) - 1)):
-                return "上涨"
-            # 重心严格递减 → 下跌趋势
-            if all(centers[i] > centers[i + 1]
-                   for i in range(len(centers) - 1)):
-                return "下跌"
-
-            # 重心不单调但中枢间隙有方向 → 按间隙多数方向判定
             up_gaps = 0
             down_gaps = 0
+            overlap_count = 0
             for i in range(len(self.zhongshus) - 1):
                 z1, z2 = self.zhongshus[i], self.zhongshus[i + 1]
                 if z1.range_high < z2.range_low:
-                    up_gaps += 1          # z2 完全在 z1 上方
+                    up_gaps += 1       # z2 完全在 z1 上方 → 向上离开
                 elif z2.range_high < z1.range_low:
-                    down_gaps += 1        # z2 完全在 z1 下方
-                # 否则两个中枢有重叠 → 不算间隙
+                    down_gaps += 1     # z2 完全在 z1 下方 → 向下离开
+                else:
+                    overlap_count += 1 # 中枢重叠
 
-            if up_gaps > down_gaps:
+            # 所有相邻中枢都不重叠且方向一致 → 趋势
+            non_overlap = (up_gaps + down_gaps)
+            total_pairs = len(self.zhongshus) - 1
+
+            if non_overlap == total_pairs and up_gaps == total_pairs:
                 return "上涨"
-            if down_gaps > up_gaps:
+            if non_overlap == total_pairs and down_gaps == total_pairs:
                 return "下跌"
 
-            # 中枢全部重叠 → 价格位置兜底
-            if current_price is not None:
-                last_zs = self.zhongshus[-1]
-                if current_price > last_zs.range_high:
-                    return "上涨"
-                if current_price < last_zs.range_low:
-                    return "下跌"
+            # 有重叠或无一致方向 → 盘整
             return "盘整"
 
-        # ── 2. 单中枢 ──────────────────────────────────────────
+        # ── 单中枢 → 盘整（无论价格在上在下, 都只是离开盘整）──
         if len(self.zhongshus) == 1:
-            zs = self.zhongshus[0]
-            if current_price is not None:
-                if current_price > zs.range_high:
-                    return "上涨"
-                if current_price < zs.range_low:
-                    return "下跌"
-
-            # 中枢内 → 线段多数方向（需显著差异）
-            recent = self.segments[-5:] if len(self.segments) >= 5 else self.segments
-            ups = sum(1 for s in recent if s.direction == "up")
-            downs = sum(1 for s in recent if s.direction == "down")
-            if ups >= downs + 2:
-                return "上涨"
-            if downs >= ups + 2:
-                return "下跌"
             return "盘整"
 
-        # ── 3. 无中枢 ──────────────────────────────────────────
-        recent_segs = self.segments[-5:] if len(self.segments) >= 5 else self.segments
-        up_segs = [s for s in recent_segs if s.direction == "up"]
-        down_segs = [s for s in recent_segs if s.direction == "down"]
-
-        # 最近向上段是否在创新高
-        making_higher_highs = (
-            len(up_segs) >= 2
-            and all(up_segs[i].high > up_segs[i - 1].high
-                    for i in range(1, min(3, len(up_segs))))
-        )
-        # 最近向下段是否在创新低
-        making_lower_lows = (
-            len(down_segs) >= 2
-            and all(down_segs[i].low < down_segs[i - 1].low
-                    for i in range(1, min(3, len(down_segs))))
-        )
-
-        if making_higher_highs and not making_lower_lows:
-            return "上涨"
-        if making_lower_lows and not making_higher_highs:
-            return "下跌"
-        if making_higher_highs and making_lower_lows:
-            return "盘整"
-
-        # 兜底：线段计数（仅段数≥3时可靠，否则跳过让笔判断）
-        ups = len(up_segs)
-        downs = len(down_segs)
-        if ups + downs >= 3:
-            if ups > downs:
-                seg_trend = "上涨"
-            elif downs > ups:
-                seg_trend = "下跌"
-            else:
-                seg_trend = None
-
-            if seg_trend is not None:
-                # 笔交叉验证：段方向与最近笔方向矛盾 → 盘整（趋势转换期）
-                if len(self.bis) >= 6:
-                    check_bis = self.bis[-8:] if len(self.bis) >= 8 else self.bis
-                    b_up = sum(1 for b in check_bis if b.direction == "up")
-                    b_down = sum(1 for b in check_bis if b.direction == "down")
-                    if (seg_trend == "上涨" and b_down > b_up) or \
-                       (seg_trend == "下跌" and b_up > b_down):
-                        return "盘整"
-                return seg_trend
-
-        # 线段不足（段数<3 或等数）→ 回退用笔判断
-        # 多窗口策略：短窗口捕获最新反转，长窗口确认大方向
+        # ── 无中枢 → 笔方向兜底 ──
         if len(self.bis) >= 4:
             all_bis = self.bis[-12:] if len(self.bis) >= 12 else self.bis
-            # 短窗口（最近5笔）：捕捉最新方向变化
             short = all_bis[-5:] if len(all_bis) >= 5 else all_bis
             s_up = sum(1 for b in short if b.direction == "up")
             s_down = sum(1 for b in short if b.direction == "down")
-            # 超短窗口（最近3笔）：确认强方向
             last3 = short[-3:] if len(short) >= 3 else short
             l3_up = sum(1 for b in last3 if b.direction == "up")
             l3_down = sum(1 for b in last3 if b.direction == "down")
-            # 长窗口：避免误判
-            l_up = sum(1 for b in all_bis if b.direction == "up")
-            l_down = sum(1 for b in all_bis if b.direction == "down")
 
-            # 优先级：超短 > 短 > 长
             if l3_up == 3:
                 return "上涨"
             if l3_down == 3:
                 return "下跌"
-            # 最近2笔同向且价格确认 → 早期反转优先于5笔窗口
             if l3_up == 2 and l3_down == 1 and _bis_making_higher_highs(short):
                 return "上涨"
             if l3_down == 2 and l3_up == 1 and _bis_making_lower_lows(short):
@@ -607,18 +514,9 @@ class SignalDetector:
             if s_down >= 4:
                 return "下跌"
             if s_up > s_down:
-                # 补充价格验证：价格未创新高 → 可能只是震荡
-                if s_up - s_down <= 1 and not _bis_making_higher_highs(short):
-                    return "盘整"
-                return "上涨"
+                return "上涨" if _bis_making_higher_highs(short) else "盘整"
             if s_down > s_up:
-                if s_down - s_up <= 1 and not _bis_making_lower_lows(short):
-                    return "盘整"
-                return "下跌"
-            if l_up > l_down + 1:
-                return "上涨"
-            if l_down > l_up + 1:
-                return "下跌"
+                return "下跌" if _bis_making_lower_lows(short) else "盘整"
 
         return "盘整"
 

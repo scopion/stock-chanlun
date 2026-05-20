@@ -201,8 +201,8 @@ class StrategyEngine:
 
         if self.divergence:
             div = self.divergence
-            mf = div.get("macd_force")
-            mf_cn = {"directional": "同向柱", "abs": "绝对值"}.get(mf, "")
+            mf = div.get("vol_force")
+            mf_cn = {"volume": "成交量背驰"}.get(mf, "")
             extras: list[str] = []
             if div.get("rsi_confirm"):
                 extras.append("RSI")

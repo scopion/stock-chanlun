@@ -62,7 +62,8 @@ class ChanlunEngine:
                                        level=level,
                                        klines_df=self.raw_klines)
         signals = sig_detector.detect_all()
-        trend = sig_detector.detect_trend()
+        current_price = float(self.raw_klines['close'].iloc[-1]) if len(self.raw_klines) > 0 else None
+        trend = sig_detector.detect_trend(current_price=current_price)
 
         # 6. K线对象（必须先创建，再传给支撑阻力位计算）
         kline_objects = self._to_klines()

@@ -137,27 +137,25 @@ class SegmentDetector:
 
     def detect_zhongshus(self, segments: list[XiangSegment]) -> list[Zhongshu]:
         """
-        检测中枢（滑动窗口算法）：
-        遍历线段序列，每取得连续3段计算重叠区间：
-        - 有重叠 → 构成中枢，尝试向后延伸（后续线段若与之重叠则并入）
-        - 无重叠 → 跳过，继续寻找下一组
-        相邻中枢之间必然间隔至少3个线段，不会重复。
+        检测中枢（含多级别扩展）:
+        1. 连续3段重叠 → 级别2中枢
+        2. 中枢延伸: 后续段触及 → 并入(不扩大范围)
+        3. 中枢扩展: 相邻同级别中枢重叠 → 升级为高级别中枢(递归)
         """
         if len(segments) < 3:
             return []
 
+        # ── 阶段1: 构建级别2中枢 ──
         zhongshus: list[Zhongshu] = []
         i = 0
 
         while i <= len(segments) - 3:
             group = segments[i:i + 3]
 
-            # 计算三段重叠区间
             range_high = min(s.high for s in group)
             range_low = max(s.low for s in group)
 
             if range_high > range_low:
-                # 重叠 → 形成中枢，尝试向后延伸
                 cur_start = group[0].start
                 cur_end = group[-1].end
                 xiang_ids = [s.id for s in group]
@@ -165,7 +163,6 @@ class SegmentDetector:
 
                 while extend_idx < len(segments):
                     nxt = segments[extend_idx]
-                    # 新段与中枢区间重叠 → 并入(不扩大范围)
                     if nxt.high > range_low and nxt.low < range_high:
                         cur_end = nxt.end
                         xiang_ids.append(nxt.id)
@@ -180,13 +177,69 @@ class SegmentDetector:
                     range_high=float(range_high),
                     range_low=float(range_low),
                     xiang_ids=xiang_ids,
-                    level=group[0].level
+                    level=2
                 ))
-                i = extend_idx  # 跳到中枢结束后的第一个线段
+                i = extend_idx
             else:
                 i += 1
 
+        # ── 阶段2: 中枢扩展(相邻同级别重叠→升级) ──
+        zhongshus = self._expand_zhongshus(zhongshus)
+
         return zhongshus
+
+    @staticmethod
+    def _expand_zhongshus(zss: list[Zhongshu]) -> list[Zhongshu]:
+        """
+        中枢扩展: 相邻同级别中枢区间重叠 → 升级为高级别中枢
+        递归执行直到无法继续升级
+        """
+        if len(zss) < 2:
+            return zss
+
+        MAX_LEVEL = 5
+        current = list(zss)
+
+        for _ in range(MAX_LEVEL):
+            expanded: list[Zhongshu] = []
+            i = 0
+            merged_any = False
+
+            while i < len(current):
+                zs = current[i]
+
+                # 检查与下一个同级别中枢是否重叠
+                if (i + 1 < len(current)
+                        and current[i + 1].level == zs.level
+                        and current[i + 1].range_low <= zs.range_high
+                        and zs.range_low <= current[i + 1].range_high):
+                    # 重叠 → 合并升级
+                    nxt = current[i + 1]
+                    new_high = min(zs.range_high, nxt.range_high)
+                    new_low = max(zs.range_low, nxt.range_low)
+                    new_level = zs.level + 1
+
+                    expanded.append(Zhongshu(
+                        id=f"zs_l{new_level}_{len(expanded)+1}",
+                        start=min(zs.start, nxt.start),
+                        end=max(zs.end, nxt.end),
+                        range_high=new_high,
+                        range_low=new_low,
+                        xiang_ids=list(set(zs.xiang_ids + nxt.xiang_ids)),
+                        level=new_level,
+                    ))
+                    i += 2
+                    merged_any = True
+                else:
+                    # 保留原中枢
+                    expanded.append(zs)
+                    i += 1
+
+            current = expanded
+            if not merged_any:
+                break
+
+        return current
 
     def get_zhongshu_for_price(self, zhongshus: list[Zhongshu],
                                  price: float) -> Optional[Zhongshu]:
