@@ -362,7 +362,7 @@ class SignalDetector:
             vol_ratio = vol_curr / vol_prev
             prob = round(min(1.0, (1 - vol_ratio) * 2 + 0.3), 2)
             signals.append(BuySellPoint(
-                type="一卖",
+                type="盘整背驰卖",
                 level=self.level,
                 price=float(curr.high),
                 datetime=curr.end,
@@ -392,7 +392,7 @@ class SignalDetector:
             vol_ratio = vol_curr / vol_prev
             prob = round(min(1.0, (1 - vol_ratio) * 2 + 0.3), 2)
             signals.append(BuySellPoint(
-                type="一买",
+                type="盘整背驰买",
                 level=self.level,
                 price=float(curr.low),
                 datetime=curr.end,
@@ -401,8 +401,8 @@ class SignalDetector:
                 description=f"盘整背驰买: 中枢内{curr.low:.2f}新低量缩至{vol_ratio:.0%}"
             ))
 
-        buy_signals = [s for s in signals if s.type == "一买"]
-        sell_signals = [s for s in signals if s.type == "一卖"]
+        buy_signals = [s for s in signals if s.type == "盘整背驰买"]
+        sell_signals = [s for s in signals if s.type == "盘整背驰卖"]
         result: list[BuySellPoint] = []
         if buy_signals:
             result.append(buy_signals[-1])
